@@ -20,3 +20,5 @@ Example flow:
   User: why does my app crash on startup?
   [Answer]
   Plum: Your prediction was partially right — the null pointer was there, but it came from the DB connection, not the config.
+
+After answering, suggest `/verify` if the user seems to have understood — it records active engagement and keeps the skill score healthy.

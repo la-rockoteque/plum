@@ -12,6 +12,7 @@
  *   plum skill-health   print skill radar
  *   plum status         weekly summary
  *   plum predict <txt>  log a prediction (boosts synthesis score)
+ *   plum verify         mark recent delegation as verified (boosts score)
  *   plum export         dump DB as JSON
  *   plum reset-scores   reset all skill scores to 50
  *   plum install        wire hooks into ~/.claude/settings.json
@@ -23,6 +24,7 @@ import { categorizeToolCall, categorizePrompt, isDelegationSignificant } from ".
 import { detectPatterns }                             from "./patterns.js";
 import { buildInterventions }                         from "./interventions.js";
 import { updateSkillScore, getSkillSnapshot, getOverallHealthScore } from "./skill-model.js";
+import { detectAndMarkVerification, manualVerify }    from "./verify.js";
 import { getConfig }                                  from "./config.js";
 import { PLUM_REPO_DIR }                              from "./env.js";
 import { join }                                       from "path";
@@ -49,6 +51,7 @@ async function main(): Promise<void> {
     case "skill-health": return printSkillHealth();
     case "status":       return printStatus();
     case "predict":      return logPrediction(process.argv.slice(3).join(" "));
+    case "verify":       return runManualVerify();
     case "export":       return exportData();
     case "reset-scores": return resetScores();
     case "install":      return installHooks();
@@ -63,7 +66,7 @@ Plum — Professor Plum cognitive atrophy harness
 
   Hook commands (called automatically by Claude Code):
     pre-tool      log PreToolUse event + emit coaching intervention if pattern detected
-    post-tool     log PostToolUse event + update skill scores
+    post-tool     log PostToolUse event + auto-detect verification + update skill scores
     user-prompt   log UserPromptSubmit + classify intent domain
     session-end   finalize session row + print summary
 
@@ -71,6 +74,7 @@ Plum — Professor Plum cognitive atrophy harness
     skill-health  print skill radar (5 domains, scores 0–100)
     status        weekly delegation + prediction summary
     predict <txt> log a prediction before asking Claude (boosts synthesis score)
+    verify        manually mark last delegation as verified (boosts score)
     export        dump DB to JSON (stdout)
     reset-scores  reset all skill scores to 50
 
@@ -145,16 +149,23 @@ async function handlePostTool(): Promise<void> {
   if (!session_id || !tool_name) return;
 
   const db         = getDb();
+  const now        = Date.now();
   const category   = categorizeToolCall(tool_name, tool_input);
   const outputSize = JSON.stringify(tool_response ?? {}).length;
 
   db.run(
-    `INSERT INTO events (session_id, ts, event_type, tool_name, category, output_size, delegated) VALUES (?, ?, 'post_tool', ?, ?, ?, 1)`,
-    [session_id, Date.now(), tool_name, category, outputSize]
+    `INSERT INTO events (session_id, ts, event_type, tool_name, category, output_size, delegated, metadata) VALUES (?, ?, 'post_tool', ?, ?, ?, 1, ?)`,
+    [session_id, now, tool_name, category, outputSize, JSON.stringify({ file_path: (tool_input as any)?.file_path })]
   );
 
   if (isDelegationSignificant(tool_name)) {
-    updateSkillScore(category, true, false);
+    // Check whether this tool use looks like the user verifying a prior delegation
+    const result = detectAndMarkVerification(session_id, tool_name, now, tool_input);
+    if (!result.verified) {
+      // New delegation, not a verification — score goes down slightly
+      updateSkillScore(category, true, false);
+    }
+    // If result.verified, detectAndMarkVerification already updated the score
   }
 }
 
@@ -231,14 +242,17 @@ function printStatus(): void {
 
   const sessions   = q(`SELECT COUNT(*) as c FROM sessions WHERE started_at > ?`, week);
   const delegated  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1`, week);
+  const verified   = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1 AND verified = 1`, week);
   const predicts   = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'predict'`, week);
   const nudges     = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ?`, week);
-  const predictRate = delegated > 0 ? Math.round((predicts / delegated) * 100) : 0;
+  const predictRate  = delegated > 0 ? Math.round((predicts  / delegated) * 100) : 0;
+  const verifyRate   = delegated > 0 ? Math.round((verified  / delegated) * 100) : 0;
 
   console.log([
     `Professor Plum — last 7 days`,
     `  Sessions:     ${sessions}`,
     `  Delegations:  ${delegated}`,
+    `  Verified:     ${verified}  (${verifyRate}% verify rate)`,
     `  Predictions:  ${predicts}  (${predictRate}% predict rate)`,
     `  Nudges sent:  ${nudges}`
   ].join("\n"));
@@ -262,6 +276,31 @@ function logPrediction(text: string): void {
 
   updateSkillScore("synthesis", false, true, true);
   console.log(`[Plum] Prediction logged. Synthesis score updated. ✓`);
+}
+
+
+// ─── Verify ──────────────────────────────────────────────────────────────────
+
+function runManualVerify(): void {
+  const sessionArg = process.argv[3];
+  const count = parseInt(process.argv[4] ?? "1", 10);
+
+  // Try to find the most recent session if none given
+  const db = getDb();
+  let sessionId = sessionArg;
+  if (!sessionId) {
+    const latest = db.query(
+      `SELECT id FROM sessions ORDER BY started_at DESC LIMIT 1`
+    ).get() as any;
+    sessionId = latest?.id ?? "manual";
+  }
+
+  const marked = manualVerify(sessionId, isNaN(count) ? 1 : count);
+  if (marked === 0) {
+    console.log("[Plum] No recent unverified delegations found in the last hour.");
+  } else {
+    console.log(`[Plum] Marked ${marked} delegation${marked > 1 ? "s" : ""} as verified. Skill scores updated. ✓`);
+  }
 }
 
 
