@@ -1,5 +1,5 @@
-import { getDb } from "./db.js";
-import { getConfig } from "./config.js";
+import { getDb }                          from "./db.js";
+import { getConfig }                      from "./config.js";
 
 export type PatternId =
   | "test_delegation"
@@ -9,6 +9,10 @@ export type PatternId =
   | "repeated_weakness"
   | "decision_outsourcing"
   | "design_critique_atrophy";
+
+// Metadata keys stored in user_prompt events
+const DECISION_META_KEY = "is_decision_seeking";
+const DESIGN_META_KEY   = "is_design_related";
 
 export interface PatternResult {
   pattern: PatternId;
@@ -116,6 +120,52 @@ export function detectPatterns(sessionId: string): PatternResult[] {
       severity: "medium",
       domain: recRow.category,
       context: `${recRow.category} delegated across ${recRow.sessions} sessions this week (${recRow.total} events)`
+    });
+  }
+
+  // ── 6. Decision outsourcing — user asks Claude to decide without constraints ─
+  // Detected from user_prompt events that have is_decision_seeking=true
+  const decisionRow = db.query(`
+    SELECT COUNT(*) as cnt
+    FROM events
+    WHERE session_id = ?
+      AND event_type = 'user_prompt'
+      AND json_extract(metadata, '$.${DECISION_META_KEY}') = 1
+  `).get(sessionId) as any;
+
+  const predictInSession = (
+    db.query(`SELECT COUNT(*) as c FROM events WHERE session_id = ? AND event_type = 'predict'`).get(sessionId) as any
+  )?.c ?? 0;
+
+  // Fire if 3+ decision-seeking prompts in session with zero predictions (user not thinking independently)
+  if ((decisionRow?.cnt ?? 0) >= 3 && predictInSession === 0) {
+    results.push({
+      pattern: "decision_outsourcing",
+      severity: "medium",
+      domain: "synthesis",
+      context: `${decisionRow.cnt} decision-seeking prompts this session with zero independent predictions`
+    });
+  }
+
+  // ── 7. Design critique atrophy — design content delegated without verification ─
+  const designRow = db.query(`
+    SELECT COUNT(*) as cnt, SUM(verified) as ver
+    FROM events
+    WHERE ts > ?
+      AND json_extract(metadata, '$.${DESIGN_META_KEY}') = 1
+      AND delegated = 1
+  `).get(now - t.weekLookbackMs) as any;
+
+  const designCnt = designRow?.cnt ?? 0;
+  const designVer = designRow?.ver ?? 0;
+
+  // Fire if 3+ design delegations this week with near-zero verification
+  if (designCnt >= 3 && designVer / Math.max(designCnt, 1) < 0.2) {
+    results.push({
+      pattern: "design_critique_atrophy",
+      severity: designCnt >= 6 ? "high" : "medium",
+      domain: "architecture",
+      context: `${designCnt} design tasks delegated this week — only ${designVer} verified`
     });
   }
 

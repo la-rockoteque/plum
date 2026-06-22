@@ -6,10 +6,12 @@ export type SkillDomain =
   | "synthesis"
   | "search";
 
-const TEST_RE  = /\btest(s|ing|ed)?\b|spec|jest|vitest|pytest|rspec|mocha|_test\.|\.test\.|\.spec\.|cargo test|go test|coverage/i;
-const DEBUG_RE = /\berror\b|\bfix\b|\bbug\b|exception|traceback|failed|undefined is not|cannot read|TypeError|ReferenceError|NullPointerException|segfault|panic:/i;
-const ARCH_RE  = /architect|system design|design pattern|structure|approach|should i use|which .* (to use|is better)|tradeoff|trade-off|scalab/i;
-const SYNTH_RE = /\bsummariz|\bexplain\b|\bunderstand\b|\bmean\b|what does|how does|what is|describe|overview|document/i;
+const TEST_RE     = /\btest(s|ing|ed)?\b|spec|jest|vitest|pytest|rspec|mocha|_test\.|\.test\.|\.spec\.|cargo test|go test|coverage/i;
+const DEBUG_RE    = /\berror\b|\bfix\b|\bbug\b|exception|traceback|failed|undefined is not|cannot read|TypeError|ReferenceError|NullPointerException|segfault|panic:/i;
+const ARCH_RE     = /architect|system design|design pattern|structure|approach|should i use|which .* (to use|is better)|tradeoff|trade-off|scalab/i;
+const SYNTH_RE    = /\bsummariz|\bexplain\b|\bunderstand\b|\bmean\b|what does|how does|what is|describe|overview|document/i;
+const DECISION_RE = /should i (use|go with|pick|choose|do)|which (is better|should i|do you recommend|would you use)|what('s| is) (the best|a good|better|recommended)|help me (choose|decide|pick)|do you (prefer|recommend)/i;
+const DESIGN_RE   = /\bui\b|\bux\b|design|layout|component|style|color|font|spacing|visual|look and feel|wireframe|mockup|figma/i;
 
 export function categorizeToolCall(toolName: string, toolInput: unknown): SkillDomain {
   const s = JSON.stringify(toolInput ?? {});
@@ -57,4 +59,14 @@ export function categorizePrompt(prompt: string): SkillDomain {
 // Only these tools represent meaningful delegation worth tracking / intervening on
 export function isDelegationSignificant(toolName: string): boolean {
   return ["Agent", "Bash", "Edit", "Write"].includes(toolName);
+}
+
+// True when the prompt is asking Claude to make a decision for the user
+export function isDecisionSeeking(prompt: string): boolean {
+  return DECISION_RE.test(prompt);
+}
+
+// True when the prompt is design/UI/UX related
+export function isDesignRelated(prompt: string): boolean {
+  return DESIGN_RE.test(prompt);
 }

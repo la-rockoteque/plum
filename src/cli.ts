@@ -20,7 +20,7 @@
  */
 
 import { getDb }                                      from "./db.js";
-import { categorizeToolCall, categorizePrompt, isDelegationSignificant } from "./categorize.js";
+import { categorizeToolCall, categorizePrompt, isDelegationSignificant, isDecisionSeeking, isDesignRelated } from "./categorize.js";
 import { detectPatterns }                             from "./patterns.js";
 import { buildInterventions }                         from "./interventions.js";
 import { updateSkillScore, getSkillSnapshot, getOverallHealthScore } from "./skill-model.js";
@@ -54,6 +54,7 @@ async function main(): Promise<void> {
     case "verify":       return runManualVerify();
     case "export":       return exportData();
     case "reset-scores": return resetScores();
+    case "wipe":         return wipeData();
     case "install":      return installHooks();
     case "uninstall":    return uninstallHooks();
     default:
@@ -72,15 +73,16 @@ Plum — Professor Plum cognitive atrophy harness
 
   User commands:
     skill-health  print skill radar (5 domains, scores 0–100)
-    status        weekly delegation + prediction summary
+    status        weekly delegation, verify, predict, explain, independence summary
     predict <txt> log a prediction before asking Claude (boosts synthesis score)
     verify        manually mark last delegation as verified (boosts score)
     export        dump DB to JSON (stdout)
     reset-scores  reset all skill scores to 50
+    wipe          delete all data in ~/.plum/ (irreversible)
 
   Setup:
-    install       wire Plum hooks into ~/.claude/settings.json
-    uninstall     remove Plum hooks from ~/.claude/settings.json
+    install       wire Plum hooks + MCP server into ~/.claude/settings.json
+    uninstall     remove Plum hooks + MCP server from ~/.claude/settings.json
 `.trim();
 
 
@@ -92,7 +94,8 @@ async function handleUserPrompt(): Promise<void> {
 
   const db  = getDb();
   const now = Date.now();
-  const category = categorizePrompt(String(message));
+  const str      = String(message);
+  const category = categorizePrompt(str);
 
   db.run(
     `INSERT OR IGNORE INTO sessions (id, started_at, project_path) VALUES (?, ?, ?)`,
@@ -100,7 +103,11 @@ async function handleUserPrompt(): Promise<void> {
   );
   db.run(
     `INSERT INTO events (session_id, ts, event_type, category, delegated, metadata) VALUES (?, ?, 'user_prompt', ?, 0, ?)`,
-    [session_id, now, category, JSON.stringify({ prompt_len: message.length })]
+    [session_id, now, category, JSON.stringify({
+      prompt_len:         str.length,
+      is_decision_seeking: isDecisionSeeking(str) ? 1 : 0,
+      is_design_related:   isDesignRelated(str)   ? 1 : 0
+    })]
   );
   db.run(`UPDATE sessions SET event_count = event_count + 1 WHERE id = ?`, [session_id]);
 }
@@ -240,21 +247,26 @@ function printStatus(): void {
   const q    = (sql: string, ...args: unknown[]) =>
     ((db.query(sql).get(...(args as [])) as any)?.c ?? 0) as number;
 
-  const sessions   = q(`SELECT COUNT(*) as c FROM sessions WHERE started_at > ?`, week);
-  const delegated  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1`, week);
-  const verified   = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1 AND verified = 1`, week);
-  const predicts   = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'predict'`, week);
-  const nudges     = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ?`, week);
-  const predictRate  = delegated > 0 ? Math.round((predicts  / delegated) * 100) : 0;
-  const verifyRate   = delegated > 0 ? Math.round((verified  / delegated) * 100) : 0;
+  const sessions      = q(`SELECT COUNT(*) as c FROM sessions WHERE started_at > ?`, week);
+  const delegated     = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1`, week);
+  const verified      = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1 AND verified = 1`, week);
+  const predicts      = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'predict'`, week);
+  const explanations  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'explanation'`, week);
+  const independence  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'independence'`, week);
+  const nudges        = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ?`, week);
+  const explainNudges = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ? AND intervention_type = 'explain_back'`, week);
+
+  const pct = (n: number, d: number) => d > 0 ? `${Math.round((n / d) * 100)}%` : "n/a";
 
   console.log([
-    `Professor Plum — last 7 days`,
-    `  Sessions:     ${sessions}`,
-    `  Delegations:  ${delegated}`,
-    `  Verified:     ${verified}  (${verifyRate}% verify rate)`,
-    `  Predictions:  ${predicts}  (${predictRate}% predict rate)`,
-    `  Nudges sent:  ${nudges}`
+    `Professor Plum — last 7 days  (spec metrics RQ1–RQ5)`,
+    `  Sessions:            ${sessions}`,
+    `  Delegations:         ${delegated}`,
+    `  Verified:            ${verified.toString().padStart(3)}  (${pct(verified, delegated)} verify rate)`,
+    `  Predictions:         ${predicts.toString().padStart(3)}  (${pct(predicts, delegated)} predict rate)`,
+    `  Explanations:        ${explanations.toString().padStart(3)}  (${pct(explanations, explainNudges)} explain rate)`,
+    `  Independence events: ${independence.toString().padStart(3)}`,
+    `  Nudges fired:        ${nudges}`
   ].join("\n"));
 }
 
@@ -329,6 +341,28 @@ function resetScores(): void {
   console.log("[Plum] All skill scores reset to 50.");
 }
 
+// ─── Wipe ─────────────────────────────────────────────────────────────────────
+
+function wipeData(): void {
+  import("fs").then(({ rmSync, existsSync }) => {
+    import("./env.js").then(({ PLUM_DATA_DIR, DB_PATH }) => {
+      const confirmation = process.argv[3];
+      if (confirmation !== "--confirm") {
+        console.log(`[Plum] This will permanently delete all data in ${PLUM_DATA_DIR}`);
+        console.log(`       Run again with --confirm to proceed:`);
+        console.log(`       bun run src/cli.ts wipe --confirm`);
+        return;
+      }
+      if (existsSync(DB_PATH)) rmSync(DB_PATH, { force: true });
+      const wal = DB_PATH + "-wal";
+      const shm = DB_PATH + "-shm";
+      if (existsSync(wal)) rmSync(wal, { force: true });
+      if (existsSync(shm)) rmSync(shm, { force: true });
+      console.log("[Plum] All data wiped. ✓");
+    });
+  });
+}
+
 
 // ─── Install / Uninstall ─────────────────────────────────────────────────────
 
@@ -376,9 +410,17 @@ function installHooks(): void {
     settings.hooks[event].unshift(hook);
   }
 
+  // Register MCP server
+  if (!settings.mcpServers) settings.mcpServers = {};
+  settings.mcpServers.plum = {
+    command: `${process.env.HOME}/.bun/bin/bun`,
+    args:    ["run", join(PLUM_REPO_DIR, "src", "mcp-server.ts")],
+    env:     {}
+  };
+
   writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
-  console.log("[Plum] Hooks installed in ~/.claude/settings.json ✓");
-  console.log("       Restart Claude Code for hooks to take effect.");
+  console.log("[Plum] Hooks + MCP server installed in ~/.claude/settings.json ✓");
+  console.log("       Restart Claude Code for changes to take effect.");
 }
 
 function uninstallHooks(): void {
@@ -393,8 +435,13 @@ function uninstallHooks(): void {
     );
   }
 
+  // Remove MCP server
+  if (settings.mcpServers?.plum) {
+    delete settings.mcpServers.plum;
+  }
+
   writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
-  console.log("[Plum] Hooks removed from ~/.claude/settings.json ✓");
+  console.log("[Plum] Hooks + MCP server removed from ~/.claude/settings.json ✓");
 }
 
 
