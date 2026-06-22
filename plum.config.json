@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "mode": "coach",
+  "minEventsBeforeIntervene": 8,
+  "thresholds": {
+    "testDelegationMin": 3,
+    "debugDelegationRate": 0.75,
+    "blindAcceptanceMin": 4,
+    "archOutsourcingMin": 3,
+    "archOutsourcingRate": 0.7,
+    "weekLookbackMs": 604800000
+  },
+  "domains": {
+    "implementation": true,
+    "debugging": true,
+    "testing": true,
+    "architecture": true,
+    "synthesis": true
+  }
+}
