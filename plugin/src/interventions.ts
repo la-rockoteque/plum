@@ -65,7 +65,7 @@ export function buildInterventions(patterns: PatternResult[]): Intervention[] {
     return {
       pattern:  p.pattern,
       type,
-      message:  COACHING[type](p.context),
+      message:  `${COACHING[type](p.context)}\nAsk it in the language the user is writing in.`,
       domain:   p.domain,
       blocking: p.severity === "high"
     };

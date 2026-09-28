@@ -2,12 +2,16 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { CONFIG_PATH } from "./env.js";
 
+export type Locale = "en" | "fr";
+export const LOCALES: readonly Locale[] = ["en", "fr"];
+
 export type UpdateMode = "prompt" | "silent" | "off";
 const UPDATE_MODES: readonly UpdateMode[] = ["prompt", "silent", "off"];
 
 export interface PlumConfig {
   enabled: boolean;
   mode: "coach" | "gating";
+  locale: Locale;         // language of generated decks; Claude already answers in the user's language
   minEventsBeforeIntervene: number;
   interventionCooldownMs: number;
   thresholds: {
@@ -48,6 +52,7 @@ export interface PlumConfig {
 export const DEFAULTS: PlumConfig = {
   enabled: true,
   mode: "coach",
+  locale: "en",
   minEventsBeforeIntervene: 8,
   interventionCooldownMs: 1_800_000,
   thresholds: {
@@ -140,6 +145,7 @@ export function resolveConfig({ shared: rawShared = {}, personal = {}, local = {
 
   return {
     ...merged,
+    locale: LOCALES.includes(merged.locale) ? merged.locale : DEFAULTS.locale,
     updates: {
       mode: updateMode,
       checkIntervalHours: typeof hours === "number" && hours >= 0 && hours <= 24 * 30 ? hours : DEFAULTS.updates.checkIntervalHours

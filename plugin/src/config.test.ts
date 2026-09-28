@@ -51,3 +51,10 @@ test("retention days default to 30 and ignore nonsense", () => {
   expect(resolveConfig({ personal: { telemetry: { retentionDays: -4 } } }).telemetry.retentionDays).toBe(30);
   expect(resolveConfig({ personal: { telemetry: { retentionDays: 7 } } }).telemetry.retentionDays).toBe(7);
 });
+
+test("locale defaults to English and ignores unsupported values; any layer can set it", () => {
+  expect(resolveConfig({}).locale).toBe("en");
+  expect(resolveConfig({ shared: { locale: "fr" } }).locale).toBe("fr");
+  expect(resolveConfig({ shared: { locale: "fr" }, personal: { locale: "en" } }).locale).toBe("en");
+  expect(resolveConfig({ personal: { locale: "de" as "fr" } }).locale).toBe("en");
+});
