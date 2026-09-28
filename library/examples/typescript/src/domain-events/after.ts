@@ -37,6 +37,13 @@ export class Order {
     return this._status;
   }
 
+  // A detached copy of the stored state; pending events stay with the original.
+  copy(): Order {
+    const clone = new Order(this.id);
+    clone._status = this._status;
+    return clone;
+  }
+
   cancel(reason: string, clock: Clock): void {
     if (this._status === "cancelled") {
       throw new OrderAlreadyCancelledError("order is already cancelled");
@@ -62,11 +69,11 @@ export class InMemoryOrderRepository implements OrderRepository {
   private orders = new Map<number, Order>();
 
   get(orderId: number): Order | undefined {
-    return this.orders.get(orderId);
+    return this.orders.get(orderId)?.copy();
   }
 
   save(order: Order): void {
-    this.orders.set(order.id, order);
+    this.orders.set(order.id, order.copy());
   }
 }
 

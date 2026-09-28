@@ -44,6 +44,12 @@ class Order:
     def status(self) -> str:
         return self._status
 
+    def copy(self) -> "Order":
+        """A detached copy of the stored state; pending events stay with the original."""
+        clone = Order(self.id)
+        clone._status = self._status
+        return clone
+
     def cancel(self, reason: str, clock: Clock) -> None:
         if self._status == "cancelled":
             raise OrderAlreadyCancelledError("order is already cancelled")
@@ -66,10 +72,11 @@ class InMemoryOrderRepository:
         self._orders: dict[int, Order] = {}
 
     def get(self, order_id: int) -> Order | None:
-        return self._orders.get(order_id)
+        stored = self._orders.get(order_id)
+        return stored.copy() if stored else None
 
     def save(self, order: Order) -> None:
-        self._orders[order.id] = order
+        self._orders[order.id] = order.copy()
 
 
 class EventHandler(Protocol):

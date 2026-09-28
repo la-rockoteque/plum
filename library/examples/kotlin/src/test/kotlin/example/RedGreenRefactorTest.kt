@@ -31,21 +31,21 @@ class RedGreenRefactorTest {
         },
     )
 
-    @Test
-    fun `cancelling a pending order succeeds`() {
-        for (stage in stages) {
-            val (cancel, status) = stage.build("pending")
-            cancel()
-            assertEquals("cancelled", status(), stage.name)
-        }
+    // Shared bodies, one @Test per stage, so every language reports the same five tests.
+    private fun cancellingAPendingOrderSucceeds(stage: Stage) {
+        val (cancel, status) = stage.build("pending")
+        cancel()
+        assertEquals("cancelled", status(), stage.name)
     }
 
-    @Test
-    fun `cancelling a shipped order is rejected`() {
-        for (stage in stages) {
-            val (cancel, status) = stage.build("shipped")
-            assertFailsWith<IllegalStateException>(message = stage.name) { cancel() }
-            assertEquals("shipped", status(), stage.name)
-        }
+    private fun cancellingAShippedOrderIsRejected(stage: Stage) {
+        val (cancel, status) = stage.build("shipped")
+        assertFailsWith<IllegalStateException>(message = stage.name) { cancel() }
+        assertEquals("shipped", status(), stage.name)
     }
+
+    @Test fun `cancelling a pending order succeeds - green`() = cancellingAPendingOrderSucceeds(stages[0])
+    @Test fun `cancelling a pending order succeeds - refactor`() = cancellingAPendingOrderSucceeds(stages[1])
+    @Test fun `cancelling a shipped order is rejected - green`() = cancellingAShippedOrderIsRejected(stages[0])
+    @Test fun `cancelling a shipped order is rejected - refactor`() = cancellingAShippedOrderIsRejected(stages[1])
 }

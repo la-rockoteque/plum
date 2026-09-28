@@ -47,6 +47,9 @@ func NewOrder(id int) *Order {
 
 func (o *Order) Status() string { return o.status }
 
+// Copy returns a detached copy of the stored state; pending events stay with the original.
+func (o *Order) Copy() *Order { return &Order{ID: o.ID, status: o.status} }
+
 func (o *Order) Cancel(reason string, clock Clock) error {
 	if o.status == "cancelled" {
 		return ErrOrderAlreadyCancelled
@@ -78,11 +81,14 @@ func NewInMemoryOrderRepository() *InMemoryOrderRepository {
 
 func (r *InMemoryOrderRepository) Get(orderID int) (*Order, bool) {
 	order, ok := r.orders[orderID]
-	return order, ok
+	if !ok {
+		return nil, false
+	}
+	return order.Copy(), true
 }
 
 func (r *InMemoryOrderRepository) Save(order *Order) error {
-	r.orders[order.ID] = order
+	r.orders[order.ID] = order.Copy()
 	return nil
 }
 

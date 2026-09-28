@@ -30,6 +30,9 @@ class Order(val id: Int) {
 
     private val events = mutableListOf<OrderCancelled>()
 
+    // A detached copy of the stored state; pending events stay with the original.
+    fun copy(): Order = Order(id).also { it.status = status }
+
     fun cancel(reason: String, clock: Clock) {
         if (status == "cancelled") {
             throw OrderAlreadyCancelledException("order is already cancelled")
@@ -54,10 +57,10 @@ interface OrderRepository {
 open class InMemoryOrderRepository : OrderRepository {
     private val orders = mutableMapOf<Int, Order>()
 
-    override fun get(orderId: Int): Order? = orders[orderId]
+    override fun get(orderId: Int): Order? = orders[orderId]?.copy()
 
     override fun save(order: Order) {
-        orders[order.id] = order
+        orders[order.id] = order.copy()
     }
 }
 

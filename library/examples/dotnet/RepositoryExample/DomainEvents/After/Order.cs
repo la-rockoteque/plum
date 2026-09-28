@@ -44,6 +44,9 @@ public sealed class Order
 
     public Order(int id) => Id = id;
 
+    // A detached copy of the stored state; pending events stay with the original.
+    public Order Copy() => new(Id) { Status = Status };
+
     public void Cancel(string reason, IClock clock)
     {
         if (Status == "cancelled")
@@ -73,9 +76,9 @@ public class InMemoryOrderRepository : IOrderRepository
 {
     private readonly Dictionary<int, Order> _orders = new();
 
-    public Order? Get(int orderId) => _orders.GetValueOrDefault(orderId);
+    public Order? Get(int orderId) => _orders.GetValueOrDefault(orderId)?.Copy();
 
-    public void Save(Order order) => _orders[order.Id] = order;
+    public void Save(Order order) => _orders[order.Id] = order.Copy();
 }
 
 public interface IEventHandler
