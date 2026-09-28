@@ -1,0 +1,130 @@
+{
+  "id": "single-responsibility",
+  "title": "Single Responsibility Principle",
+  "category": "principles",
+  "domain": "implementation",
+  "level": "foundation",
+  "summary": "A class should answer to one actor, not do literally one thing — each reason to change belongs to its own collaborator.",
+  "prerequisites": [],
+  "related": [
+    "dependency-inversion"
+  ],
+  "signals": [
+    "one class (often named `*Service` or `*Manager`) that validates a business rule, formats a message, and writes a log in the same method",
+    "a bug fix to wording (an email subject, a log format) that also touches the class owning an unrelated business rule",
+    "a single test asserting three unrelated outcomes — a status change, a message body, and a log line — because they can't be exercised apart",
+    "a change requested by one stakeholder (support, legal, ops) that forces edits in code another stakeholder (product) also depends on"
+  ],
+  "roles": {
+    "OrderService": "before: one class doing all three jobs — the cancellation rule, the email wording, and the audit format",
+    "CancelOrder": "after: high-level policy that owns only the cancellation rule",
+    "OrderNotifier": "after: collaborator that owns the email wording",
+    "AuditLog": "after: collaborator that owns the audit entry format"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Three reasons to change",
+      "idea": "OrderService cancels the order, formats the customer email, and writes the audit log in one class and one method."
+    },
+    {
+      "id": "after",
+      "title": "One reason each",
+      "idea": "CancelOrder owns only the cancellation rule; OrderNotifier and AuditLog each own one remaining concern and are tested alone."
+    }
+  ],
+  "checks": [
+    "\"A class should do one thing\" is a common but misleading phrasing of SRP. What should replace \"thing\", and why does that fix the phrasing?",
+    "In the before version of OrderService, name the three actors who could each ask for an independent change, and what each would ask for.",
+    "Why does extracting OrderNotifier reduce how many tests you re-run when marketing changes the email wording, even though the total number of tests goes up?",
+    "When would splitting the audit-log call into its own class be over-engineering rather than an application of SRP?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/single_responsibility/before.py"
+        ],
+        "after": [
+          "src/single_responsibility/after/order.py",
+          "src/single_responsibility/after/order_notifier.py",
+          "src/single_responsibility/after/audit_log.py",
+          "src/single_responsibility/after/cancel_order.py"
+        ]
+      },
+      "tests": [
+        "tests/test_single_responsibility.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_single_responsibility.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/single-responsibility/before.ts"
+        ],
+        "after": [
+          "src/single-responsibility/after/order.ts",
+          "src/single-responsibility/after/order-notifier.ts",
+          "src/single-responsibility/after/audit-log.ts",
+          "src/single-responsibility/after/cancel-order.ts"
+        ]
+      },
+      "tests": [
+        "tests/single-responsibility.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/single-responsibility.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "singleresponsibility/before/order_service.go"
+        ],
+        "after": [
+          "singleresponsibility/after/order.go",
+          "singleresponsibility/after/order_notifier.go",
+          "singleresponsibility/after/audit_log.go",
+          "singleresponsibility/after/cancel_order.go"
+        ]
+      },
+      "tests": [
+        "singleresponsibility/before/order_service_test.go",
+        "singleresponsibility/after/cancel_order_test.go"
+      ],
+      "run": "go test ./singleresponsibility/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/SingleResponsibility/Before/OrderService.cs"
+        ],
+        "after": [
+          "RepositoryExample/SingleResponsibility/After/Order.cs",
+          "RepositoryExample/SingleResponsibility/After/OrderNotifier.cs",
+          "RepositoryExample/SingleResponsibility/After/AuditLog.cs",
+          "RepositoryExample/SingleResponsibility/After/CancelOrder.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/SingleResponsibilityTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.SingleResponsibilityTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/singleresponsibility/before/OrderService.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/singleresponsibility/after/Order.kt",
+          "src/main/kotlin/example/singleresponsibility/after/OrderNotifier.kt",
+          "src/main/kotlin/example/singleresponsibility/after/AuditLog.kt",
+          "src/main/kotlin/example/singleresponsibility/after/CancelOrder.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/SingleResponsibilityTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.SingleResponsibilityTest'"
+    }
+  }
+}
