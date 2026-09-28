@@ -1,0 +1,150 @@
+{
+  "id": "repository",
+  "title": "Repository Pattern",
+  "category": "backend",
+  "level": "foundation",
+  "summary": "Give the application a small, domain-shaped contract for loading and saving aggregates so business rules never touch storage APIs.",
+  "prerequisites": [],
+  "related": [
+    "dependency-inversion",
+    "orm",
+    "unit-of-work",
+    "cqrs"
+  ],
+  "signals": [
+    "SQL, ORM or HTTP-client calls inside use cases, services or controllers",
+    "business-rule tests that need a real database or network",
+    "table/column names appearing next to domain rules",
+    "the same query copy-pasted across several handlers"
+  ],
+  "roles": {
+    "Order": "aggregate / entity that owns an invariant",
+    "Order.cancel()": "state transition that enforces the invariant",
+    "OrderRepository": "port: persistence contract owned by the application (get / save)",
+    "CancelOrder": "use case / application service",
+    "SqliteOrderRepository": "adapter translating the port to a real store",
+    "InMemoryOrderRepository": "test/demo adapter that honours the same contract",
+    "OrderNotFound": "application-level error for a missing aggregate"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Coupled",
+      "idea": "The use case queries storage, checks the rule and writes the row in one place; its test needs a database."
+    },
+    {
+      "id": "after",
+      "title": "Port + adapters",
+      "idea": "The use case asks a two-method contract for a detached aggregate, calls domain behaviour, and saves. Adapters own every storage detail."
+    }
+  ],
+  "checks": [
+    "Who owns the repository contract — the application or the infrastructure — and why does that matter?",
+    "Why do adapters return detached copies instead of live objects?",
+    "What does this pattern cost in a small CRUD app, and when does it stop paying for itself?",
+    "Which test in this example needs no database, and what does that buy you?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "before_repository.py"
+        ],
+        "after": [
+          "src/repository_example/domain/order.py",
+          "src/repository_example/application/order_repository.py",
+          "src/repository_example/application/cancel_order.py",
+          "src/repository_example/infrastructure/in_memory_order_repository.py",
+          "src/repository_example/infrastructure/sqlite_order_repository.py",
+          "src/repository_example/infrastructure/demo.py"
+        ]
+      },
+      "tests": [
+        "tests/test_before_repository.py",
+        "tests/test_cancel_order.py",
+        "tests/test_sqlite_order_repository.py"
+      ],
+      "run": "PYTHONPATH=src python demo.py memory|sqlite"
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/BeforeRepository.cs"
+        ],
+        "after": [
+          "RepositoryExample/Domain/Order.cs",
+          "RepositoryExample/Application/IOrderRepository.cs",
+          "RepositoryExample/Application/CancelOrder.cs",
+          "RepositoryExample/Infrastructure/InMemoryOrderRepository.cs",
+          "RepositoryExample/Infrastructure/SqliteOrderRepository.cs",
+          "RepositoryExample/Program.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/RepositoryTests.cs",
+        "RepositoryExample.Tests/CancelOrderTests.cs"
+      ],
+      "run": "dotnet run --project RepositoryExample -- memory|sqlite"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/before-repository.ts"
+        ],
+        "after": [
+          "src/domain/order.ts",
+          "src/application/order-repository.ts",
+          "src/application/cancel-order.ts",
+          "src/infrastructure/in-memory-order-repository.ts",
+          "src/infrastructure/sqlite-order-repository.ts",
+          "src/demo.ts"
+        ]
+      },
+      "tests": [
+        "tests/repository.test.ts",
+        "tests/cancel-order.test.ts"
+      ],
+      "run": "npm run demo -- memory|sqlite"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "before/before_repository.go"
+        ],
+        "after": [
+          "domain/order.go",
+          "application/order_repository.go",
+          "application/cancel_order.go",
+          "infrastructure/memory/order_repository.go",
+          "infrastructure/sqlite/order_repository.go",
+          "cmd/demo/main.go"
+        ]
+      },
+      "tests": [
+        "application/cancel_order_test.go",
+        "infrastructure/sqlite/order_repository_test.go"
+      ],
+      "run": "go run ./cmd/demo memory|sqlite"
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/before/BeforeRepository.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/domain/Order.kt",
+          "src/main/kotlin/example/application/OrderRepository.kt",
+          "src/main/kotlin/example/application/CancelOrder.kt",
+          "src/main/kotlin/example/infrastructure/InMemoryOrderRepository.kt",
+          "src/main/kotlin/example/infrastructure/SqliteOrderRepository.kt",
+          "src/main/kotlin/example/Demo.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/RepositoryTest.kt",
+        "src/test/kotlin/example/CancelOrderTest.kt"
+      ],
+      "run": "./gradlew run --args=memory|sqlite"
+    }
+  }
+}

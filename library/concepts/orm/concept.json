@@ -1,0 +1,123 @@
+{
+  "id": "orm",
+  "title": "ORMs — mapping objects to relational storage",
+  "category": "backend",
+  "level": "intermediate",
+  "summary": "An ORM maps rows to objects and generates SQL; it is an adapter detail behind the application's boundary, not a replacement for it.",
+  "prerequisites": [
+    "repository"
+  ],
+  "related": [
+    "unit-of-work",
+    "cqrs"
+  ],
+  "signals": [
+    "ORM entities/annotations used as domain objects or API DTOs",
+    "long-lived or global sessions/contexts",
+    "loops that trigger one query per item (N+1)",
+    "auto-create/auto-migrate schema in production paths"
+  ],
+  "roles": {
+    "OrderRow": "persistence model / mapped row",
+    "ORM adapter": "repository implementation translating rows to domain objects",
+    "raw-SQL adapter": "the before: hand-written SQL and manual mapping",
+    "Order": "domain object, free of ORM types",
+    "session / context / transaction": "unit of change-tracking and lifetime"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Raw SQL adapter",
+      "idea": "Hand-written SQL and manual row mapping behind the repository contract."
+    },
+    {
+      "id": "after",
+      "title": "ORM adapter",
+      "idea": "The same contract implemented with mapped rows and generated SQL; the use case and domain are untouched."
+    }
+  ],
+  "checks": [
+    "What problem does an ORM solve that a repository doesn't, and vice versa?",
+    "What is a detached snapshot, and why does mutating it persist nothing?",
+    "Describe the N+1 problem and two ways to avoid it.",
+    "Why is schema auto-creation not a migration plan?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/repository_example/infrastructure/sqlite_order_repository.py"
+        ],
+        "after": [
+          "src/orm_example/repository.py",
+          "src/orm_example/demo.py"
+        ]
+      },
+      "tests": [
+        "tests/test_orm.py"
+      ],
+      "run": "PYTHONPATH=src python -m orm_example.demo raw|orm|sql"
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/Infrastructure/SqliteOrderRepository.cs"
+        ],
+        "after": [
+          "RepositoryExample/Orm/OrderDbContext.cs",
+          "RepositoryExample/Orm/EfOrderRepository.cs",
+          "RepositoryExample/Orm/Demo.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/OrmTests.cs"
+      ],
+      "run": "dotnet run --project RepositoryExample -- orm raw|orm|sql"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/infrastructure/sqlite-order-repository.ts"
+        ],
+        "after": [
+          "src/orm/repository.ts",
+          "src/orm/demo.ts"
+        ]
+      },
+      "tests": [
+        "tests/orm.test.ts"
+      ],
+      "run": "npm run demo:orm -- raw|orm|sql"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "infrastructure/sqlite/order_repository.go"
+        ],
+        "after": [
+          "orm/repository.go",
+          "cmd/orm-demo/main.go"
+        ]
+      },
+      "tests": [
+        "orm/repository_test.go"
+      ],
+      "run": "go run ./cmd/orm-demo raw|orm|sql"
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/infrastructure/SqliteOrderRepository.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/orm/Repository.kt",
+          "src/main/kotlin/example/orm/Demo.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/OrmTest.kt"
+      ],
+      "run": "./gradlew ormDemo --args=raw|orm|sql"
+    }
+  }
+}

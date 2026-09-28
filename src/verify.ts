@@ -49,7 +49,7 @@ export function detectAndMarkVerification(
     WHERE session_id = ?
       AND delegated = 1
       AND verified  = 0
-      AND event_type IN ('pre_tool', 'post_tool')
+      AND event_type = 'post_tool'
       AND tool_name IN ('Edit', 'Write', 'Agent')
       AND ts > ?
     ORDER BY ts DESC
@@ -111,7 +111,7 @@ export function manualVerify(sessionId: string = "manual", count: number = 1): n
     WHERE session_id = ?
       AND delegated = 1
       AND verified  = 0
-      AND event_type IN ('pre_tool', 'post_tool')
+      AND event_type = 'post_tool'
       AND tool_name IN ('Edit', 'Write', 'Agent', 'Bash')
       AND ts > ?
     ORDER BY ts DESC

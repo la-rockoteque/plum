@@ -1,0 +1,144 @@
+{
+  "id": "dependency-inversion",
+  "title": "Dependency Injection vs Dependency Inversion",
+  "category": "principles",
+  "level": "foundation",
+  "summary": "Injection moves construction to the caller; inversion makes high-level policy own the abstraction that low-level details implement.",
+  "prerequisites": [],
+  "related": [
+    "repository"
+  ],
+  "signals": [
+    "`new`/construction of clients, loggers or gateways inside business code",
+    "business code importing infrastructure packages (SDKs, drivers, HTTP clients)",
+    "interfaces that live next to their only implementation and leak its types",
+    "tests that monkey-patch globals or modules to isolate a unit"
+  ],
+  "roles": {
+    "WelcomeUser": "use case / high-level policy",
+    "Notifier": "port: abstraction owned by the policy",
+    "ConsoleNotifier": "low-level detail / adapter",
+    "RecordingNotifier": "test double satisfying the same port",
+    "demo entry point": "composition root: the only place that knows both sides"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Self-constructing",
+      "idea": "The use case creates its own concrete notifier."
+    },
+    {
+      "id": "injection",
+      "title": "Injection only",
+      "idea": "The caller passes the notifier in, but the parameter still names the concrete infrastructure type."
+    },
+    {
+      "id": "inversion",
+      "title": "Inversion",
+      "idea": "The application declares the contract it needs; adapters implement it; the composition root wires them."
+    }
+  ],
+  "checks": [
+    "Is injecting a concrete class dependency inversion? Why not?",
+    "In which direction do source dependencies point after inversion, and in which direction do runtime calls go?",
+    "What is a composition root, and what must never happen outside of it?",
+    "When is a DI container worth its registration and lifetime rules?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/dependency_injection_example/before.py"
+        ],
+        "injection": [
+          "src/dependency_injection_example/injection_only.py"
+        ],
+        "inversion": [
+          "src/dependency_injection_example/application.py",
+          "src/dependency_injection_example/infrastructure.py",
+          "src/dependency_injection_example/demo.py"
+        ]
+      },
+      "tests": [
+        "tests/test_dependency_injection.py"
+      ],
+      "run": "PYTHONPATH=src python -m dependency_injection_example.demo before|injection|console|recording"
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/DependencyInjection/Before.cs"
+        ],
+        "injection": [
+          "RepositoryExample/DependencyInjection/InjectionOnly.cs"
+        ],
+        "inversion": [
+          "RepositoryExample/DependencyInjection/Application.cs",
+          "RepositoryExample/DependencyInjection/Infrastructure.cs",
+          "RepositoryExample/DependencyInjection/Demo.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/DependencyInjectionTests.cs"
+      ],
+      "run": "dotnet run --project RepositoryExample -- di before|injection|console|recording"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/di/before.ts"
+        ],
+        "injection": [
+          "src/di/injection-only.ts"
+        ],
+        "inversion": [
+          "src/di/application.ts",
+          "src/di/infrastructure.ts",
+          "src/di/demo.ts"
+        ]
+      },
+      "tests": [
+        "tests/dependency-injection.test.ts"
+      ],
+      "run": "npm run demo:di -- before|injection|console|recording"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "di/before/welcome_user.go"
+        ],
+        "injection": [
+          "di/injectiononly/welcome_user.go"
+        ],
+        "inversion": [
+          "di/application/welcome_user.go",
+          "di/infrastructure/notifier.go",
+          "cmd/di-demo/main.go"
+        ]
+      },
+      "tests": [
+        "di/application/welcome_user_test.go"
+      ],
+      "run": "go run ./cmd/di-demo before|injection|console|recording"
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/di/before/WelcomeUser.kt"
+        ],
+        "injection": [
+          "src/main/kotlin/example/di/injectiononly/WelcomeUser.kt"
+        ],
+        "inversion": [
+          "src/main/kotlin/example/di/application/WelcomeUser.kt",
+          "src/main/kotlin/example/di/infrastructure/Notifier.kt",
+          "src/main/kotlin/example/di/Demo.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/DependencyInjectionTest.kt"
+      ],
+      "run": "./gradlew diDemo --args=before|injection|console|recording"
+    }
+  }
+}

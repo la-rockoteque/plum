@@ -1,0 +1,138 @@
+{
+  "id": "cqrs",
+  "title": "CQRS — Command Query Responsibility Segregation",
+  "category": "architecture",
+  "level": "intermediate",
+  "summary": "Change state through a behaviour-rich write model and read through a separate, display-shaped read model — even over one shared store.",
+  "prerequisites": [
+    "repository"
+  ],
+  "related": [
+    "unit-of-work",
+    "orm"
+  ],
+  "signals": [
+    "methods that mutate state and return the domain entity to a UI (`updateAndGet`)",
+    "domain entities serialized straight into API responses",
+    "list/report screens that load full aggregates just to show three fields",
+    "read-side needs (joins, derived flags) bending the domain model"
+  ],
+  "roles": {
+    "CancelOrder": "command handler (write side)",
+    "Order": "write model enforcing invariants",
+    "OrderSummary": "read model: plain display data with derived fields",
+    "OrderSummaryReader": "query port (no save)",
+    "GetOrderSummary": "query handler",
+    "SqliteOrderSummaryReader": "projection straight from storage, no entity constructed"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Mixed",
+      "idea": "One service method changes the order and returns the domain entity to a caller that only needs display data."
+    },
+    {
+      "id": "after",
+      "title": "Separate models",
+      "idea": "The command path is unchanged; a query path returns a summary projected directly from the shared store."
+    }
+  ],
+  "checks": [
+    "What is the difference between CQS and CQRS?",
+    "Does CQRS require two databases, events or eventual consistency? When would you add them?",
+    "Why is `can_cancel` on the read model only a display hint?",
+    "What would make a separate read model not worth it here?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/cqrs_example/before.py"
+        ],
+        "after": [
+          "src/cqrs_example/queries.py",
+          "src/cqrs_example/in_memory_reader.py",
+          "src/cqrs_example/sqlite_reader.py",
+          "src/cqrs_example/demo.py"
+        ]
+      },
+      "tests": [
+        "tests/test_cqrs.py",
+        "tests/test_cqrs_sqlite.py"
+      ],
+      "run": "PYTHONPATH=src python -m cqrs_example.demo before|memory|sqlite"
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/Cqrs/Before.cs"
+        ],
+        "after": [
+          "RepositoryExample/Cqrs/Queries.cs",
+          "RepositoryExample/Cqrs/InMemoryOrderSummaryReader.cs",
+          "RepositoryExample/Cqrs/SqliteOrderSummaryReader.cs",
+          "RepositoryExample/Cqrs/Demo.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/CqrsTests.cs",
+        "RepositoryExample.Tests/CqrsSqliteTests.cs"
+      ],
+      "run": "dotnet run --project RepositoryExample -- cqrs before|memory|sqlite"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/cqrs/before.ts"
+        ],
+        "after": [
+          "src/cqrs/queries.ts",
+          "src/cqrs/in-memory-reader.ts",
+          "src/cqrs/sqlite-reader.ts",
+          "src/cqrs/demo.ts"
+        ]
+      },
+      "tests": [
+        "tests/cqrs.test.ts",
+        "tests/cqrs-sqlite.test.ts"
+      ],
+      "run": "npm run demo:cqrs -- before|memory|sqlite"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "cqrs/before/order_service.go"
+        ],
+        "after": [
+          "cqrs/queries/queries.go",
+          "cqrs/memory/reader.go",
+          "cqrs/sqlite/reader.go",
+          "cmd/cqrs-demo/main.go"
+        ]
+      },
+      "tests": [
+        "cqrs/queries/queries_test.go",
+        "cqrs/sqlite/reader_test.go"
+      ],
+      "run": "go run ./cmd/cqrs-demo before|memory|sqlite"
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/cqrs/before/OrderService.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/cqrs/Queries.kt",
+          "src/main/kotlin/example/cqrs/InMemoryOrderSummaryReader.kt",
+          "src/main/kotlin/example/cqrs/SqliteOrderSummaryReader.kt",
+          "src/main/kotlin/example/cqrs/Demo.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/CqrsTest.kt",
+        "src/test/kotlin/example/CqrsSqliteTest.kt"
+      ],
+      "run": "./gradlew cqrsDemo --args=before|memory|sqlite"
+    }
+  }
+}

@@ -8,6 +8,7 @@ export type InterventionType =
   | "retrieval_exercise";
 
 export interface Intervention {
+  pattern: PatternId;
   type: InterventionType;
   message: string;
   domain: string;
@@ -15,7 +16,7 @@ export interface Intervention {
 }
 
 // ─── Coaching message templates ───────────────────────────────────────────────
-// These are injected into Claude's context via hook stdout.
+// These are injected into Claude's context via PreToolUse additionalContext.
 // Claude reads them and becomes the voice of the coach.
 
 const COACHING: Record<InterventionType, (ctx: string) => string> = {
@@ -62,6 +63,7 @@ export function buildInterventions(patterns: PatternResult[]): Intervention[] {
   return sorted.map((p) => {
     const type = PATTERN_MAP[p.pattern] ?? "predict_first";
     return {
+      pattern:  p.pattern,
       type,
       message:  COACHING[type](p.context),
       domain:   p.domain,

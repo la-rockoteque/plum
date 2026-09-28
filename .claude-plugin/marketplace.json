@@ -1,0 +1,14 @@
+{
+  "name": "plum",
+  "owner": {
+    "name": "Rocko Bernier"
+  },
+  "description": "Professor Plum \u2014 cognitive atrophy harness for Claude Code",
+  "plugins": [
+    {
+      "name": "plum",
+      "source": "./",
+      "description": "Professor Plum \u2014 cognitive atrophy harness for Claude Code"
+    }
+  ]
+}

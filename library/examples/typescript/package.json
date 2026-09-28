@@ -1,0 +1,30 @@
+{
+  "name": "repository-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.10.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --experimental-sqlite --test dist/tests/*.test.js",
+    "demo": "npm run build && node --experimental-sqlite dist/src/demo.js",
+    "demo:di": "npm run build && node dist/src/di/demo.js",
+    "demo:cqrs": "npm run build && node --experimental-sqlite dist/src/cqrs/demo.js",
+    "demo:uow": "npm run build && node dist/src/uow/demo.js",
+    "demo:orm": "npm run build && node --experimental-sqlite dist/src/orm/demo.js"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "22.10.0",
+    "typescript": "5.7.2"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1",
+    "drizzle-orm": "0.45.2"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
+  }
+}

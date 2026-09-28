@@ -54,70 +54,99 @@ User prompts → Claude Code tools
 | `blind_acceptance` | `explain_back` — require explanation before moving on |
 | `architectural_outsourcing` | `predict_first` — require sketch before Claude designs |
 | `repeated_weakness` | `retrieval_exercise` — ask user to recall before re-explaining |
+| `decision_outsourcing` | `predict_first` — user asks Claude to decide without offering a view |
+| `design_critique_atrophy` | `diff_review` — design changes accepted without review |
 
-Set `"mode": "gating"` in `plum.config.json` to block high-severity patterns instead of just coaching.
-
----
-
-## Setup
-
-```bash
-# 1. Install dependencies (Bun only — uses bun:sqlite, no npm install needed)
-bun --version   # needs 1.x
-
-# 2. Wire hooks into ~/.claude/settings.json
-bun run src/cli.ts install
-
-# 3. Restart Claude Code — hooks activate immediately
-```
-
-Hooks point to `hooks/` in this repo. Runtime data lives in `~/.plum/` (gitignored).
+Nudges are injected into Claude's context via the PreToolUse hook and fire at most once per pattern every
+`interventionCooldownMs` (30 min by default) — per session for session patterns, across sessions for week-wide ones. Set `"mode": "gating"` to make high-severity
+patterns also ask for permission before the tool runs.
 
 ---
 
-## Slash Commands (install to ~/.claude/skills/)
+## Install (any repo)
 
-```bash
-cp skills/*.md ~/.claude/skills/
+Plum ships as a Claude Code plugin; this repo is its own marketplace. Requires [Bun](https://bun.sh) 1.x.
+
+```text
+/plugin marketplace add /path/to/Plum        # or <github-owner>/<repo>
+/plugin install plum@plum
 ```
+
+- **User scope** — Plum observes every repo you open.
+- **Project scope** — Plum is enabled only for that repo (written to its `.claude/settings.json`, so teammates who trust the marketplace get it too).
+- **Local scope** — this repo only, just for you (`.claude/settings.local.json`).
+
+Restart Claude Code after installing. Upgrading from the old `plum install`? Run `bin/plum uninstall` first,
+otherwise the legacy hooks in `~/.claude/settings.json` fire alongside the plugin's.
+
+To try it without installing: `claude --plugin-dir /path/to/Plum`.
+
+The plugin wires up:
+
+- **Hooks** (`hooks/hooks.json`) — PreToolUse, PostToolUse, UserPromptSubmit, SessionEnd
+- **MCP server** (`.mcp.json`) — `get_skill_context`, `log_explanation`, `log_independence`, `get_weekly_status`
+- **Skills** (`skills/`)
 
 | Command | What it does |
 |---|---|
-| `/skill-health` | Print skill radar — 5 domain scores with trend arrows |
-| `/cognitive-check` | Weekly delegation breakdown + predict rate |
-| `/predict <text>` | Log a hypothesis before asking Claude (core retention gesture) |
+| `/plum:skill-health` | Skill radar — 5 domain scores |
+| `/plum:cognitive-check` | Weekly delegation breakdown + predict rate |
+| `/plum:predict <text>` | Log a hypothesis before asking Claude (core retention gesture) |
+| `/plum:verify` | Mark the last delegation as reviewed |
+| `/plum:explain` | Explain-back loop, logged via MCP |
+| `/plum:teach <concept>` | Lecture deck on a concept, bound to the current repo's domain and architecture |
+
+### Concept library
+
+`library/` holds runnable before → after examples (Python, C#, TypeScript, Go, Kotlin) for repository,
+DI vs DIP, CQRS, ORMs and unit of work, each with an agnostic narrative and a manifest of roles that Claude maps
+onto the consumer repo. See [library/README.md](library/README.md) and the plan in
+[library/ROADMAP.md](library/ROADMAP.md).
+
+Data from every repo lands in the same `~/.plum/atrophy.db`, tagged with the session's `project_path`.
 
 ---
 
 ## CLI
 
 ```bash
-bun run src/cli.ts skill-health    # skill radar
-bun run src/cli.ts status          # weekly summary
-bun run src/cli.ts predict "..."   # log prediction
-bun run src/cli.ts export          # dump DB as JSON
-bun run src/cli.ts reset-scores    # reset all scores to 50
-bun run src/cli.ts uninstall       # remove hooks from ~/.claude/settings.json
+bin/plum skill-health         # skill radar
+bin/plum status               # weekly summary
+bin/plum predict "..."        # log prediction
+bin/plum verify               # mark last delegation verified
+bin/plum export               # dump DB as JSON
+bin/plum reset-scores         # reset all scores to 50
+bin/plum wipe --confirm       # delete all local data
+bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
 ```
+
+Development: `bun test`, `bun run typecheck`, `bun run validate`.
 
 ---
 
-## Configuration (`plum.config.json`)
+## Configuration (`~/.plum/config.json`, optional)
 
-```json
+Every key is optional; missing keys fall back to the defaults below.
+
+```jsonc
 {
   "enabled": true,
   "mode": "coach",                     // "coach" | "gating"
   "minEventsBeforeIntervene": 8,       // calibration gate
+  "interventionCooldownMs": 1800000,   // min gap between repeats of the same nudge
   "thresholds": {
     "testDelegationMin": 3,
     "debugDelegationRate": 0.75,
     "blindAcceptanceMin": 4,
     "archOutsourcingMin": 3,
-    "archOutsourcingRate": 0.70
-  }
+    "archOutsourcingRate": 0.70,
+    "weekLookbackMs": 604800000
+  },
+  "domains": { "debugging": true }     // set a domain to false to silence its nudges
 }
 ```
+
+Set `PLUM_DATA_DIR` to move the data directory (and config) elsewhere.
 
 ---
 
@@ -125,7 +154,7 @@ bun run src/cli.ts uninstall       # remove hooks from ~/.claude/settings.json
 
 - **Local-first**: all data in `~/.plum/atrophy.db`, never sent anywhere
 - **Opt-in**: set `"enabled": false` to disable entirely
-- **User-owned**: `plum export` gives full JSON dump; delete `~/.plum/` to wipe everything
+- **User-owned**: `plum export` gives full JSON dump; `plum wipe --confirm` deletes everything
 - **Coach, not judge**: interventions are coaching nudges, not blocking errors
 
 ---
@@ -135,10 +164,11 @@ bun run src/cli.ts uninstall       # remove hooks from ~/.claude/settings.json
 | Phase | Status | Description |
 |---|---|---|
 | 1 — Observer | ✅ Done | Hook-based event logging (PreToolUse, PostToolUse, UserPromptSubmit, SessionEnd) |
-| 2 — Pattern Detection | ✅ Done | 5 risk patterns with severity levels |
+| 2 — Pattern Detection | ✅ Done | 7 risk patterns with severity levels |
 | 3 — Skill Model | ✅ Done | 5-domain scoring with delta updates |
 | 4 — Intervention Engine | ✅ Done | 5 coaching intervention types, injected via hook stdout |
-| 5 — Skills + CLI | ✅ Done | `/skill-health`, `/cognitive-check`, `/predict` + full CLI |
+| 5 — Skills + CLI | ✅ Done | `/skill-health`, `/cognitive-check`, `/predict`, `/verify`, `/explain` + full CLI |
+| 5.5 — Plugin | ✅ Done | Installable per-user or per-repo as a Claude Code plugin |
 | 6 — Claude.ai Cowork | 🔜 Planned | Browser surface for synthesis/decision outsourcing |
 
 ---

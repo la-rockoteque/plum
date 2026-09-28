@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "plum": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/plum",
+      "args": ["mcp"]
+    }
+  }
+}

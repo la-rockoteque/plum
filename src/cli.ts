@@ -7,6 +7,7 @@
  *   plum post-tool      reads PostToolUse JSON from stdin
  *   plum user-prompt    reads UserPromptSubmit JSON from stdin
  *   plum session-end    reads SessionEnd JSON from stdin
+ *   plum mcp            run the MCP server on stdio
  *
  * User commands:
  *   plum skill-health   print skill radar
@@ -15,20 +16,22 @@
  *   plum verify         mark recent delegation as verified (boosts score)
  *   plum export         dump DB as JSON
  *   plum reset-scores   reset all skill scores to 50
- *   plum install        wire hooks into ~/.claude/settings.json
- *   plum uninstall      remove hooks from ~/.claude/settings.json
+ *   plum wipe --confirm delete all local data
+ *   plum uninstall      remove legacy (pre-plugin) hooks from ~/.claude/settings.json
  */
 
-import { getDb }                                      from "./db.js";
+import { getDb, latestSessionId }                     from "./db.js";
 import { categorizeToolCall, categorizePrompt, isDelegationSignificant, isDecisionSeeking, isDesignRelated } from "./categorize.js";
-import { detectPatterns }                             from "./patterns.js";
+import { detectPatterns, type PatternResult }         from "./patterns.js";
 import { buildInterventions }                         from "./interventions.js";
 import { updateSkillScore, getSkillSnapshot, getOverallHealthScore } from "./skill-model.js";
 import { detectAndMarkVerification, manualVerify }    from "./verify.js";
 import { getConfig }                                  from "./config.js";
-import { PLUM_REPO_DIR }                              from "./env.js";
+import { weeklyStatus }                               from "./status.js";
+import { loadConcepts, formatConceptList, LIBRARY_DIR } from "./library.js";
+import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
 import { join }                                       from "path";
-import { readFileSync, writeFileSync, existsSync }    from "fs";
+import { readFileSync, writeFileSync, existsSync, rmSync } from "fs";
 
 const command = process.argv[2] ?? "help";
 
@@ -41,7 +44,7 @@ async function readStdin(): Promise<Record<string, unknown>> {
 
 async function main(): Promise<void> {
   const cfg = getConfig();
-  if (cfg.enabled === false && !["install", "uninstall", "help"].includes(command)) return;
+  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "help"].includes(command)) return;
 
   switch (command) {
     case "pre-tool":     return handlePreTool();
@@ -55,7 +58,9 @@ async function main(): Promise<void> {
     case "export":       return exportData();
     case "reset-scores": return resetScores();
     case "wipe":         return wipeData();
-    case "install":      return installHooks();
+    case "concepts":     return listConcepts(process.argv[3] === "--json");
+    case "mcp":          { await import("./mcp-server.js"); return; }
+    case "install":      return console.log(INSTALL_HELP);
     case "uninstall":    return uninstallHooks();
     default:
       console.log(HELP);
@@ -79,28 +84,36 @@ Plum — Professor Plum cognitive atrophy harness
     export        dump DB to JSON (stdout)
     reset-scores  reset all skill scores to 50
     wipe          delete all data in ~/.plum/ (irreversible)
+    concepts      list the concept library (--json for the full manifests)
 
   Setup:
-    install       wire Plum hooks + MCP server into ~/.claude/settings.json
-    uninstall     remove Plum hooks + MCP server from ~/.claude/settings.json
+    install       show how to install Plum as a Claude Code plugin
+    uninstall     remove legacy (pre-plugin) hooks + MCP entry from ~/.claude/settings.json
+`.trim();
+
+const INSTALL_HELP = `
+Plum installs as a Claude Code plugin. From inside Claude Code:
+
+  /plugin marketplace add <path-to-this-repo or github owner/repo>
+  /plugin install plum@plum
+
+Pick "project" scope to enable it only for the current repo.
+If you used the old \`plum install\`, run \`plum uninstall\` first so hooks don't fire twice.
 `.trim();
 
 
 // ─── Hook Handlers ────────────────────────────────────────────────────────────
 
 async function handleUserPrompt(): Promise<void> {
-  const { session_id, message } = await readStdin() as { session_id?: string; message?: string };
-  if (!session_id || !message) return;
+  const { session_id, prompt, cwd } = await readStdin() as { session_id?: string; prompt?: string; cwd?: string };
+  if (!session_id || !prompt) return;
 
   const db  = getDb();
   const now = Date.now();
-  const str      = String(message);
+  const str      = String(prompt);
   const category = categorizePrompt(str);
 
-  db.run(
-    `INSERT OR IGNORE INTO sessions (id, started_at, project_path) VALUES (?, ?, ?)`,
-    [session_id, now, process.cwd()]
-  );
+  ensureSession(session_id, now, cwd);
   db.run(
     `INSERT INTO events (session_id, ts, event_type, category, delegated, metadata) VALUES (?, ?, 'user_prompt', ?, 0, ?)`,
     [session_id, now, category, JSON.stringify({
@@ -113,39 +126,41 @@ async function handleUserPrompt(): Promise<void> {
 }
 
 async function handlePreTool(): Promise<void> {
-  const { session_id, tool_name, tool_input } = await readStdin() as {
-    session_id?: string; tool_name?: string; tool_input?: unknown;
+  const { session_id, tool_name, cwd } = await readStdin() as {
+    session_id?: string; tool_name?: string; cwd?: string;
   };
   if (!session_id || !tool_name) return;
 
-  const db       = getDb();
-  const now      = Date.now();
-  const category = categorizeToolCall(tool_name, tool_input);
-
-  db.run(
-    `INSERT OR IGNORE INTO sessions (id, started_at, project_path) VALUES (?, ?, ?)`,
-    [session_id, now, process.cwd()]
-  );
-  db.run(
-    `INSERT INTO events (session_id, ts, event_type, tool_name, category, delegated, metadata) VALUES (?, ?, 'pre_tool', ?, ?, 1, ?)`,
-    [session_id, now, tool_name, category, JSON.stringify({ input_keys: Object.keys((tool_input as object) ?? {}) })]
-  );
-  db.run(`UPDATE sessions SET event_count = event_count + 1 WHERE id = ?`, [session_id]);
-
+  // The tool call itself is logged once, by post-tool. Pre-tool only decides whether to coach.
+  const now = Date.now();
+  ensureSession(session_id, now, cwd);
   if (!isDelegationSignificant(tool_name)) return;
 
-  const patterns = detectPatterns(session_id);
+  const cfg = getConfig();
+  const db  = getDb();
+  // Week-wide patterns cool down globally, or every new session would repeat the same nudge
+  const recentlyNudged = (p: PatternResult) => db.query(
+    `SELECT 1 FROM interventions WHERE pattern = ? AND ts > ? AND (? = 'week' OR session_id = ?) LIMIT 1`
+  ).get(p.pattern, now - cfg.interventionCooldownMs, p.scope, session_id) !== null;
+
+  const patterns = detectPatterns(session_id).filter((p) => !recentlyNudged(p));
   if (patterns.length === 0) return;
 
-  const interventions = buildInterventions(patterns);
-  if (interventions.length === 0) return;
+  const top = buildInterventions(patterns)[0];
+  if (!top) return;
 
-  const top = interventions[0];
-  process.stdout.write(top.message + "\n");
+  const gate = cfg.mode === "gating" && top.blocking;
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: top.message,
+      ...(gate && { permissionDecision: "ask", permissionDecisionReason: top.message })
+    }
+  }) + "\n");
 
   db.run(
     `INSERT INTO interventions (ts, session_id, pattern, intervention_type, domain, message) VALUES (?, ?, ?, ?, ?, ?)`,
-    [now, session_id, patterns[0].pattern, top.type, top.domain, top.message]
+    [now, session_id, top.pattern, top.type, top.domain, top.message]
   );
 }
 
@@ -155,25 +170,30 @@ async function handlePostTool(): Promise<void> {
   };
   if (!session_id || !tool_name) return;
 
-  const db         = getDb();
-  const now        = Date.now();
-  const category   = categorizeToolCall(tool_name, tool_input);
-  const outputSize = JSON.stringify(tool_response ?? {}).length;
+  const db          = getDb();
+  const now         = Date.now();
+  const category    = categorizeToolCall(tool_name, tool_input);
+  const outputSize  = JSON.stringify(tool_response ?? {}).length;
+  const significant = isDelegationSignificant(tool_name);
+
+  // Check before inserting so the current call can't be picked as its own verification target
+  const result = detectAndMarkVerification(session_id, tool_name, now, tool_input);
 
   db.run(
-    `INSERT INTO events (session_id, ts, event_type, tool_name, category, output_size, delegated, metadata) VALUES (?, ?, 'post_tool', ?, ?, ?, 1, ?)`,
-    [session_id, now, tool_name, category, outputSize, JSON.stringify({ file_path: (tool_input as any)?.file_path })]
+    `INSERT INTO events (session_id, ts, event_type, tool_name, category, output_size, delegated, metadata) VALUES (?, ?, 'post_tool', ?, ?, ?, ?, ?)`,
+    [session_id, now, tool_name, category, outputSize, significant ? 1 : 0, JSON.stringify({ file_path: (tool_input as any)?.file_path })]
   );
+  db.run(`UPDATE sessions SET event_count = event_count + 1 WHERE id = ?`, [session_id]);
 
-  if (isDelegationSignificant(tool_name)) {
-    // Check whether this tool use looks like the user verifying a prior delegation
-    const result = detectAndMarkVerification(session_id, tool_name, now, tool_input);
-    if (!result.verified) {
-      // New delegation, not a verification — score goes down slightly
-      updateSkillScore(category, true, false);
-    }
-    // If result.verified, detectAndMarkVerification already updated the score
-  }
+  // A delegation that isn't itself a verification of a prior one counts against the domain
+  if (significant && !result.verified) updateSkillScore(category, true, false);
+}
+
+function ensureSession(sessionId: string, now: number, cwd?: string): void {
+  getDb().run(
+    `INSERT OR IGNORE INTO sessions (id, started_at, project_path) VALUES (?, ?, ?)`,
+    [sessionId, now, cwd ?? process.cwd()]
+  );
 }
 
 async function handleSessionEnd(): Promise<void> {
@@ -242,32 +262,7 @@ function printSkillHealth(): void {
 // ─── Status ──────────────────────────────────────────────────────────────────
 
 function printStatus(): void {
-  const db   = getDb();
-  const week = Date.now() - 604_800_000;
-  const q    = (sql: string, ...args: unknown[]) =>
-    ((db.query(sql).get(...(args as [])) as any)?.c ?? 0) as number;
-
-  const sessions      = q(`SELECT COUNT(*) as c FROM sessions WHERE started_at > ?`, week);
-  const delegated     = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1`, week);
-  const verified      = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1 AND verified = 1`, week);
-  const predicts      = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'predict'`, week);
-  const explanations  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'explanation'`, week);
-  const independence  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'independence'`, week);
-  const nudges        = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ?`, week);
-  const explainNudges = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ? AND intervention_type = 'explain_back'`, week);
-
-  const pct = (n: number, d: number) => d > 0 ? `${Math.round((n / d) * 100)}%` : "n/a";
-
-  console.log([
-    `Professor Plum — last 7 days  (spec metrics RQ1–RQ5)`,
-    `  Sessions:            ${sessions}`,
-    `  Delegations:         ${delegated}`,
-    `  Verified:            ${verified.toString().padStart(3)}  (${pct(verified, delegated)} verify rate)`,
-    `  Predictions:         ${predicts.toString().padStart(3)}  (${pct(predicts, delegated)} predict rate)`,
-    `  Explanations:        ${explanations.toString().padStart(3)}  (${pct(explanations, explainNudges)} explain rate)`,
-    `  Independence events: ${independence.toString().padStart(3)}`,
-    `  Nudges fired:        ${nudges}`
-  ].join("\n"));
+  console.log(weeklyStatus());
 }
 
 
@@ -282,8 +277,8 @@ function logPrediction(text: string): void {
   const db = getDb();
   db.run(
     `INSERT INTO events (session_id, ts, event_type, category, delegated, verified, metadata)
-     VALUES ('manual', ?, 'predict', 'synthesis', 0, 1, ?)`,
-    [Date.now(), JSON.stringify({ prediction: text })]
+     VALUES (?, ?, 'predict', 'synthesis', 0, 1, ?)`,
+    [latestSessionId() ?? "manual", Date.now(), JSON.stringify({ prediction: text })]
   );
 
   updateSkillScore("synthesis", false, true, true);
@@ -297,22 +292,23 @@ function runManualVerify(): void {
   const sessionArg = process.argv[3];
   const count = parseInt(process.argv[4] ?? "1", 10);
 
-  // Try to find the most recent session if none given
-  const db = getDb();
-  let sessionId = sessionArg;
-  if (!sessionId) {
-    const latest = db.query(
-      `SELECT id FROM sessions ORDER BY started_at DESC LIMIT 1`
-    ).get() as any;
-    sessionId = latest?.id ?? "manual";
-  }
-
+  const sessionId = sessionArg ?? latestSessionId() ?? "manual";
   const marked = manualVerify(sessionId, isNaN(count) ? 1 : count);
   if (marked === 0) {
     console.log("[Plum] No recent unverified delegations found in the last hour.");
   } else {
     console.log(`[Plum] Marked ${marked} delegation${marked > 1 ? "s" : ""} as verified. Skill scores updated. ✓`);
   }
+}
+
+
+// ─── Concept library ─────────────────────────────────────────────────────────
+
+function listConcepts(json: boolean): void {
+  const concepts = loadConcepts();
+  if (json) return console.log(JSON.stringify(concepts, null, 2));
+  console.log(`Concept library (${LIBRARY_DIR})\n`);
+  console.log(formatConceptList(concepts));
 }
 
 
@@ -323,9 +319,9 @@ function exportData(): void {
   console.log(JSON.stringify({
     exported_at:   new Date().toISOString(),
     skill_scores:  db.query(`SELECT * FROM skill_scores`).all(),
-    sessions:      db.query(`SELECT * FROM sessions ORDER BY started_at DESC LIMIT 100`).all(),
-    events:        db.query(`SELECT * FROM events ORDER BY ts DESC LIMIT 2000`).all(),
-    interventions: db.query(`SELECT * FROM interventions ORDER BY ts DESC LIMIT 200`).all()
+    sessions:      db.query(`SELECT * FROM sessions ORDER BY started_at DESC`).all(),
+    events:        db.query(`SELECT * FROM events ORDER BY ts DESC`).all(),
+    interventions: db.query(`SELECT * FROM interventions ORDER BY ts DESC`).all()
   }, null, 2));
 }
 
@@ -344,107 +340,44 @@ function resetScores(): void {
 // ─── Wipe ─────────────────────────────────────────────────────────────────────
 
 function wipeData(): void {
-  import("fs").then(({ rmSync, existsSync }) => {
-    import("./env.js").then(({ PLUM_DATA_DIR, DB_PATH }) => {
-      const confirmation = process.argv[3];
-      if (confirmation !== "--confirm") {
-        console.log(`[Plum] This will permanently delete all data in ${PLUM_DATA_DIR}`);
-        console.log(`       Run again with --confirm to proceed:`);
-        console.log(`       bun run src/cli.ts wipe --confirm`);
-        return;
-      }
-      if (existsSync(DB_PATH)) rmSync(DB_PATH, { force: true });
-      const wal = DB_PATH + "-wal";
-      const shm = DB_PATH + "-shm";
-      if (existsSync(wal)) rmSync(wal, { force: true });
-      if (existsSync(shm)) rmSync(shm, { force: true });
-      console.log("[Plum] All data wiped. ✓");
-    });
-  });
-}
-
-
-// ─── Install / Uninstall ─────────────────────────────────────────────────────
-
-const SETTINGS_PATH = join(process.env.HOME ?? "~", ".claude", "settings.json");
-const HOOK_MARKER   = "plum-";
-
-function plumHooks() {
-  const repoDir = PLUM_REPO_DIR;
-  return {
-    PreToolUse: {
-      matcher: "",
-      hooks: [{ type: "command", command: `${repoDir}/hooks/pre-tool.sh`, timeout: 10, async: false }]
-    },
-    PostToolUse: {
-      matcher: "",
-      hooks: [{ type: "command", command: `${repoDir}/hooks/post-tool.sh`, timeout: 5, async: true }]
-    },
-    UserPromptSubmit: {
-      matcher: "",
-      hooks: [{ type: "command", command: `${repoDir}/hooks/user-prompt.sh`, timeout: 5, async: true }]
-    },
-    SessionEnd: {
-      matcher: "",
-      hooks: [{ type: "command", command: `${repoDir}/hooks/session-end.sh`, timeout: 10, async: false }]
-    }
-  };
-}
-
-function installHooks(): void {
-  const settings = existsSync(SETTINGS_PATH)
-    ? JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"))
-    : {};
-
-  if (!settings.hooks) settings.hooks = {};
-
-  const hooks = plumHooks();
-
-  for (const [event, hook] of Object.entries(hooks)) {
-    if (!settings.hooks[event]) settings.hooks[event] = [];
-    // Remove any stale Plum hooks first
-    settings.hooks[event] = settings.hooks[event].filter(
-      (h: any) => !h.hooks?.[0]?.command?.includes(HOOK_MARKER) &&
-                  !h.hooks?.[0]?.command?.includes("/Plum/hooks/")
-    );
-    settings.hooks[event].unshift(hook);
+  if (process.argv[3] !== "--confirm") {
+    console.log(`[Plum] This will permanently delete all data in ${PLUM_DATA_DIR}`);
+    console.log(`       Run again with --confirm to proceed: plum wipe --confirm`);
+    return;
   }
-
-  // Register MCP server
-  if (!settings.mcpServers) settings.mcpServers = {};
-  settings.mcpServers.plum = {
-    command: `${process.env.HOME}/.bun/bin/bun`,
-    args:    ["run", join(PLUM_REPO_DIR, "src", "mcp-server.ts")],
-    env:     {}
-  };
-
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
-  console.log("[Plum] Hooks + MCP server installed in ~/.claude/settings.json ✓");
-  console.log("       Restart Claude Code for changes to take effect.");
+  for (const f of [DB_PATH, DB_PATH + "-wal", DB_PATH + "-shm"]) rmSync(f, { force: true });
+  console.log("[Plum] All data wiped. ✓");
 }
+
+
+// ─── Legacy uninstall ────────────────────────────────────────────────────────
+// Before the plugin, `plum install` wrote absolute hook paths into ~/.claude/settings.json.
+
+const SETTINGS_PATH  = join(HOME, ".claude", "settings.json");
+const LEGACY_HOOK_RE = /plum.*\/hooks\/(pre-tool|post-tool|user-prompt|session-end)\.sh/i;
 
 function uninstallHooks(): void {
   if (!existsSync(SETTINGS_PATH)) { console.log("[Plum] No settings.json found."); return; }
 
   const settings = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"));
-  if (!settings.hooks) { console.log("[Plum] No hooks to remove."); return; }
+  const isPlum   = (h: any) => (h.hooks ?? []).some((x: any) => LEGACY_HOOK_RE.test(x.command ?? ""));
 
-  for (const event of Object.keys(settings.hooks)) {
-    settings.hooks[event] = (settings.hooks[event] as any[]).filter(
-      (h: any) => !h.hooks?.[0]?.command?.includes("/Plum/hooks/")
-    );
-  }
+  const hooks = Object.fromEntries(
+    Object.entries(settings.hooks ?? {})
+      .map(([event, list]) => [event, (list as any[]).filter((h) => !isPlum(h))])
+      .filter(([, list]) => (list as any[]).length > 0)
+  );
+  const { plum: _, ...mcpServers } = settings.mcpServers ?? {};
 
-  // Remove MCP server
-  if (settings.mcpServers?.plum) {
-    delete settings.mcpServers.plum;
-  }
+  const next = { ...settings, hooks };
+  if (settings.mcpServers) next.mcpServers = mcpServers;
 
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
-  console.log("[Plum] Hooks + MCP server removed from ~/.claude/settings.json ✓");
+  writeFileSync(SETTINGS_PATH, JSON.stringify(next, null, 2) + "\n");
+  console.log("[Plum] Legacy hooks + MCP entry removed from ~/.claude/settings.json ✓");
 }
 
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
-main().catch(() => process.exit(0));
+// Hooks must never break Claude Code: report and exit 0 (hook stderr is only shown in debug mode)
+main().catch((e) => { console.error(`[Plum] ${command} failed:`, e); process.exit(0); });

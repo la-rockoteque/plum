@@ -19,6 +19,7 @@ export interface PatternResult {
   severity: "low" | "medium" | "high";
   domain: string;
   context: string;
+  scope: "session" | "week";   // what the pattern measures — also the scope of its cooldown
 }
 
 export function detectPatterns(sessionId: string): PatternResult[] {
@@ -38,12 +39,14 @@ export function detectPatterns(sessionId: string): PatternResult[] {
   const testRow = db.query(`
     SELECT COUNT(*) as cnt, SUM(delegated) as del
     FROM events
-    WHERE session_id = ? AND category = 'testing'
+    WHERE session_id = ? AND category = 'testing' AND event_type != 'user_prompt'
   `).get(sessionId) as any;
+  // Prompts that mention tests aren't independent work; predict/explanation/independence rows are.
 
   if ((testRow?.cnt ?? 0) >= t.testDelegationMin && testRow?.del === testRow?.cnt) {
     results.push({
       pattern: "test_delegation",
+      scope: "session",
       severity: (testRow.cnt ?? 0) >= 5 ? "high" : "medium",
       domain: "testing",
       context: `tests delegated ${testRow.cnt}× this session with no independent work`
@@ -62,6 +65,7 @@ export function detectPatterns(sessionId: string): PatternResult[] {
   if (debugCnt >= 5 && debugCnt > 0 && debugDel / debugCnt >= t.debugDelegationRate) {
     results.push({
       pattern: "debugging_avoidance",
+      scope: "week",
       severity: debugCnt >= 10 ? "high" : "medium",
       domain: "debugging",
       context: `${Math.round((debugDel / debugCnt) * 100)}% of debugging delegated this week (${debugCnt} events)`
@@ -80,6 +84,7 @@ export function detectPatterns(sessionId: string): PatternResult[] {
   if (agentCnt >= t.blindAcceptanceMin && predCnt === 0) {
     results.push({
       pattern: "blind_acceptance",
+      scope: "session",
       severity: agentCnt >= 7 ? "high" : "medium",
       domain: "synthesis",
       context: `${agentCnt} agent delegations with zero predictions this session`
@@ -98,6 +103,7 @@ export function detectPatterns(sessionId: string): PatternResult[] {
   if (archCnt >= t.archOutsourcingMin && archCnt > 0 && archDel / archCnt >= t.archOutsourcingRate) {
     results.push({
       pattern: "architectural_outsourcing",
+      scope: "week",
       severity: "medium",
       domain: "architecture",
       context: `${archDel}/${archCnt} architecture decisions delegated this week`
@@ -117,6 +123,7 @@ export function detectPatterns(sessionId: string): PatternResult[] {
   if ((recRow?.sessions ?? 0) >= 3 && (recRow?.total ?? 0) >= 10) {
     results.push({
       pattern: "repeated_weakness",
+      scope: "week",
       severity: "medium",
       domain: recRow.category,
       context: `${recRow.category} delegated across ${recRow.sessions} sessions this week (${recRow.total} events)`
@@ -141,33 +148,44 @@ export function detectPatterns(sessionId: string): PatternResult[] {
   if ((decisionRow?.cnt ?? 0) >= 3 && predictInSession === 0) {
     results.push({
       pattern: "decision_outsourcing",
+      scope: "session",
       severity: "medium",
       domain: "synthesis",
       context: `${decisionRow.cnt} decision-seeking prompts this session with zero independent predictions`
     });
   }
 
-  // ── 7. Design critique atrophy — design content delegated without verification ─
+  // ── 7. Design critique atrophy — design prompts whose sessions' delegations go unverified ─
+  // Design intent only exists on user_prompt events, so join back to the delegations in those sessions.
   const designRow = db.query(`
-    SELECT COUNT(*) as cnt, SUM(verified) as ver
+    WITH design_prompts AS (
+      SELECT session_id FROM events
+      WHERE ts > ? AND event_type = 'user_prompt'
+        AND json_extract(metadata, '$.${DESIGN_META_KEY}') = 1
+    )
+    SELECT
+      (SELECT COUNT(*) FROM design_prompts) AS cnt,
+      COUNT(*)                              AS del,
+      COALESCE(SUM(verified), 0)            AS ver
     FROM events
-    WHERE ts > ?
-      AND json_extract(metadata, '$.${DESIGN_META_KEY}') = 1
-      AND delegated = 1
-  `).get(now - t.weekLookbackMs) as any;
+    WHERE ts > ? AND delegated = 1
+      AND session_id IN (SELECT session_id FROM design_prompts)
+  `).get(now - t.weekLookbackMs, now - t.weekLookbackMs) as any;
 
   const designCnt = designRow?.cnt ?? 0;
+  const designDel = designRow?.del ?? 0;
   const designVer = designRow?.ver ?? 0;
 
-  // Fire if 3+ design delegations this week with near-zero verification
-  if (designCnt >= 3 && designVer / Math.max(designCnt, 1) < 0.2) {
+  // Fire if 3+ design prompts this week and <20% of the resulting delegations were verified
+  if (designCnt >= 3 && designDel > 0 && designVer / designDel < 0.2) {
     results.push({
       pattern: "design_critique_atrophy",
+      scope: "week",
       severity: designCnt >= 6 ? "high" : "medium",
       domain: "architecture",
-      context: `${designCnt} design tasks delegated this week — only ${designVer} verified`
+      context: `${designCnt} design requests this week — only ${designVer}/${designDel} resulting changes verified`
     });
   }
 
-  return results;
+  return results.filter((r) => cfg.domains[r.domain] !== false);
 }

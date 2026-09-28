@@ -1,0 +1,122 @@
+{
+  "id": "unit-of-work",
+  "title": "Unit of Work",
+  "category": "backend",
+  "level": "intermediate",
+  "summary": "Group every read, domain change and write of one business operation into a single commit — or roll all of it back.",
+  "prerequisites": [
+    "repository",
+    "orm"
+  ],
+  "related": [
+    "cqrs"
+  ],
+  "signals": [
+    "a loop of save() calls where a failure halfway leaves partial state",
+    "try/catch blocks that swallow errors inside a transaction callback",
+    "each repository call opening and committing its own transaction",
+    "emails or API calls made inside a DB transaction"
+  ],
+  "roles": {
+    "batch cancellation": "one business operation spanning several aggregates",
+    "session / DbContext / transaction handle": "the unit of work: tracks changes, owns commit/rollback",
+    "flush": "send SQL without making it permanent",
+    "commit": "make the whole operation durable",
+    "per-call repository (before)": "auto-committing writes that can't be undone together"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Save per call",
+      "idea": "Each cancellation commits on its own, so a later failure leaves the earlier one persisted."
+    },
+    {
+      "id": "after",
+      "title": "One transaction",
+      "idea": "All reads, domain calls and writes run inside one scope that commits once or rolls back entirely."
+    }
+  ],
+  "checks": [
+    "What is the difference between flush and commit?",
+    "Why can catching an error inside an auto-committing callback corrupt data?",
+    "What can a database rollback not undo, and what pattern handles that?",
+    "Why must the second read in the duplicate-ID test see the first cancellation?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/orm_example/repository.py"
+        ],
+        "after": [
+          "src/unit_of_work_example/batch.py",
+          "src/unit_of_work_example/demo.py"
+        ]
+      },
+      "tests": [
+        "tests/test_unit_of_work.py"
+      ],
+      "run": "PYTHONPATH=src python -m unit_of_work_example.demo"
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/Orm/EfOrderRepository.cs"
+        ],
+        "after": [
+          "RepositoryExample/UnitOfWork/Batch.cs",
+          "RepositoryExample/UnitOfWork/Demo.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/UnitOfWorkTests.cs"
+      ],
+      "run": "dotnet run --project RepositoryExample -- uow"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/orm/repository.ts"
+        ],
+        "after": [
+          "src/uow/batch.ts",
+          "src/uow/demo.ts"
+        ]
+      },
+      "tests": [
+        "tests/uow.test.ts"
+      ],
+      "run": "npm run demo:uow"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "orm/repository.go"
+        ],
+        "after": [
+          "uow/batch.go",
+          "cmd/uow-demo/main.go"
+        ]
+      },
+      "tests": [
+        "uow/batch_test.go"
+      ],
+      "run": "go run ./cmd/uow-demo"
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/orm/Repository.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/uow/Batch.kt",
+          "src/main/kotlin/example/uow/Demo.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/UnitOfWorkTest.kt"
+      ],
+      "run": "./gradlew uowDemo"
+    }
+  }
+}

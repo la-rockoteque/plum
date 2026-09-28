@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+**/bin/
+**/obj/
+node_modules/
+dist/
+.gradle/
+.kotlin/
+build/

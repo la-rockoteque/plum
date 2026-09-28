@@ -4,3 +4,6 @@ node_modules/
 *.db-shm
 data/
 .env
+.idea/
+.omc/
+.DS_Store

@@ -1,0 +1,289 @@
+<title>Repository Pattern Lecture</title>
+<!--
+  Plum lecture deck template.
+  Claude: keep everything outside the SLIDES markers; replace the <title> and the slides between them.
+  Slide kinds (data-kind): title | question | problem | idea | diagram | binding | before | after | compare | tradeoff | quiz | exercise | recap
+  Each slide may end with <aside class="notes">…</aside> (speaker notes, toggled with N).
+  Quiz answers go in <details class="answer"><summary>Reveal</summary>…</details>.
+  Code: <pre><code class="language-ts">…</code></pre> — HTML-escape <, >, & inside code.
+  Source attribution: <p class="src">path/to/file.ts:12–30</p> directly under a code block from the consumer repo.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Young+Serif&display=swap">
+<style>
+  :root {
+    --paper: #F5F3F7;
+    --surface: #FFFFFF;
+    --ink: #1E1A22;
+    --muted: #625A69;
+    --rule: #DDD6E2;
+    --plum: #7B3F72;
+    --plum-soft: #EFE3EC;
+    --before: #A8661A;
+    --before-soft: #F6EBDD;
+    --after: #2B7A68;
+    --after-soft: #E0F0EB;
+    --code-bg: #F0EDF3;
+    --tok-kw: #7B3F72;
+    --tok-str: #2B7A68;
+    --tok-com: #857C8C;
+    --tok-num: #A8661A;
+    --tok-fn: #3C4F9A;
+    --display: "Young Serif", Georgia, "Times New Roman", serif;
+    --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #16131A; --surface: #211C26; --ink: #ECE8F0; --muted: #A79EAE; --rule: #372F3D;
+      --plum: #D29BC6; --plum-soft: #3A2537; --before: #E3A955; --before-soft: #3A2C1A;
+      --after: #74C7B1; --after-soft: #183530; --code-bg: #1C1821;
+      --tok-kw: #D29BC6; --tok-str: #74C7B1; --tok-com: #857C8C; --tok-num: #E3A955; --tok-fn: #9FB0F0;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #16131A; --surface: #211C26; --ink: #ECE8F0; --muted: #A79EAE; --rule: #372F3D;
+    --plum: #D29BC6; --plum-soft: #3A2537; --before: #E3A955; --before-soft: #3A2C1A;
+    --after: #74C7B1; --after-soft: #183530; --code-bg: #1C1821;
+    --tok-kw: #D29BC6; --tok-str: #74C7B1; --tok-com: #857C8C; --tok-num: #E3A955; --tok-fn: #9FB0F0;
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 17px/1.55 var(--body);
+    display: grid; grid-template-rows: auto 1fr auto;
+    padding-inline: 16px;
+  }
+
+  /* ── top bar ─────────────────────────────── */
+  .bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding-block: 12px; border-bottom: 1px solid var(--rule);
+    font-size: 13px; color: var(--muted);
+  }
+  .bar .course { font-family: var(--display); color: var(--plum); font-size: 15px; }
+  .bar .spacer { flex: 1; }
+  .rail { display: flex; gap: 3px; flex: 1 1 220px; min-width: 0; }
+  .rail button {
+    flex: 1; height: 6px; border: 0; border-radius: 3px; padding: 0; cursor: pointer;
+    background: var(--rule);
+  }
+  .rail button[data-kind="before"] { background: color-mix(in srgb, var(--before) 35%, var(--rule)); }
+  .rail button[data-kind="after"], .rail button[data-kind="compare"] { background: color-mix(in srgb, var(--after) 35%, var(--rule)); }
+  .rail button[aria-current="true"] { background: var(--plum); }
+  .rail button:focus-visible, .ctl:focus-visible { outline: 2px solid var(--plum); outline-offset: 2px; }
+
+  /* ── slides ──────────────────────────────── */
+  #deck { overflow: auto; padding-block: 28px; }
+  .slide { max-width: 1180px; margin-inline: auto; display: grid; gap: 18px; align-content: start; }
+  .slide:not(.active) { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .slide.active { animation: enter .25s ease-out; }
+    @keyframes enter { from { transform: translateY(6px); opacity: .6; } to { transform: none; opacity: 1; } }
+  }
+
+  .eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--plum);
+  }
+  .slide[data-kind="before"] .eyebrow { color: var(--before); }
+  .slide[data-kind="after"] .eyebrow { color: var(--after); }
+
+  h1, h2 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.08; }
+  h2 { font-size: clamp(26px, 4vw, 38px); line-height: 1.15; }
+  h3 { font-size: 17px; margin: 0; }
+  p, li { max-width: 65ch; margin: 0; }
+  ul, ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+  .lede { font-size: 20px; color: var(--muted); }
+  strong { color: var(--ink); }
+  em { color: var(--plum); font-style: normal; }
+
+  .slide[data-kind="title"] { align-content: center; min-height: 60%; }
+  .slide[data-kind="title"] .meta { color: var(--muted); font-size: 14px; }
+  .slide[data-kind="question"] h2 { font-size: clamp(30px, 5vw, 48px); }
+
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 20px; }
+  .pane { display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .tag {
+    justify-self: start; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .tag.before { color: var(--before); background: var(--before-soft); }
+  .tag.after  { color: var(--after);  background: var(--after-soft); }
+  .tag.yours  { color: var(--plum);   background: var(--plum-soft); }
+
+  pre {
+    margin: 0; overflow-x: auto; background: var(--code-bg); border-radius: 8px;
+    padding: 14px 16px; font: 13.5px/1.55 var(--mono); tab-size: 2;
+    font-variant-ligatures: none;   /* show === and => as typed; learners copy these */
+  }
+  .cols pre { font-size: 12.5px; }
+  code { font-family: var(--mono); font-size: .92em; }
+  pre code { font-size: inherit; }
+  .src { font: 12px var(--mono); color: var(--muted); }
+  .hljs-keyword, .hljs-built_in, .hljs-type { color: var(--tok-kw); }
+  .hljs-string, .hljs-regexp { color: var(--tok-str); }
+  .hljs-comment { color: var(--tok-com); font-style: italic; }
+  .hljs-number, .hljs-literal { color: var(--tok-num); }
+  .hljs-title, .hljs-function .hljs-title { color: var(--tok-fn); }
+
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  td code { white-space: nowrap; }
+  td.missing { color: var(--before); }
+
+  .diagram { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; overflow-x: auto; }
+
+  .callout { border-left: 3px solid var(--plum); padding: 4px 0 4px 14px; color: var(--muted); }
+
+  details.answer { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 14px; background: var(--surface); }
+  details.answer summary { cursor: pointer; font-weight: 700; color: var(--plum); }
+  details.answer[open] summary { margin-bottom: 8px; }
+  .quiz-list { counter-reset: q; display: grid; gap: 14px; list-style: none; padding: 0; }
+  .quiz-list > li { display: grid; gap: 8px; }
+
+  aside.notes {
+    display: none; font-size: 14px; color: var(--muted); border-top: 1px dashed var(--rule); padding-top: 10px;
+  }
+  body.show-notes aside.notes { display: block; }
+
+  /* ── controls ────────────────────────────── */
+  .controls {
+    display: flex; align-items: center; gap: 10px; padding-block: 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--rule); font-size: 13px; color: var(--muted);
+  }
+  .ctl {
+    font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .ctl:hover { border-color: var(--plum); }
+  .ctl[aria-pressed="true"] { background: var(--plum-soft); border-color: var(--plum); }
+  .count { font-variant-numeric: tabular-nums; }
+  .keys { margin-left: auto; }
+  @media (max-width: 560px) { .keys { display: none; } body { font-size: 16px; } }
+</style>
+
+<header class="bar">
+  <span class="course">Professor Plum</span>
+  <nav class="rail" id="rail" aria-label="Slides"></nav>
+</header>
+
+<main id="deck">
+<!-- SLIDES:START -->
+
+<section class="slide" data-kind="title">
+  <p class="eyebrow">Lecture · backend foundations</p>
+  <h1>The Repository Pattern</h1>
+  <p class="lede">Why your business rules shouldn't know what a table is.</p>
+  <p class="meta">Bound to: example-shop · TypeScript · Express + Prisma · ~25 min</p>
+  <aside class="notes">Template sample. Claude replaces every slide between the SLIDES markers.</aside>
+</section>
+
+<section class="slide" data-kind="question">
+  <p class="eyebrow">Before we start — predict</p>
+  <h2>If you renamed the <code>status</code> column tomorrow, how many business files would you have to edit?</h2>
+  <p class="lede">Write your guess down. We'll count at the end.</p>
+</section>
+
+<section class="slide" data-kind="compare">
+  <p class="eyebrow">Stage 1 → 2</p>
+  <h2>Same rule, two homes</h2>
+  <div class="cols">
+    <div class="pane">
+      <span class="tag before">Before · coupled</span>
+<pre><code class="language-ts">async function cancelOrder(db: Db, id: number) {
+  const row = db.get("SELECT status FROM orders WHERE id = ?", id);
+  if (row.status === "cancelled") throw new Error("already cancelled");
+  db.run("UPDATE orders SET status = 'cancelled' WHERE id = ?", id);
+}</code></pre>
+    </div>
+    <div class="pane">
+      <span class="tag after">After · port + adapter</span>
+<pre><code class="language-ts">class CancelOrder {
+  constructor(private readonly orders: OrderRepository) {}
+  execute(id: number) {
+    const order = this.orders.get(id) ?? throwNotFound(id);
+    order.cancel();
+    this.orders.save(order);
+  }
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-kind="quiz">
+  <p class="eyebrow">Check your understanding</p>
+  <h2>Explain it back</h2>
+  <ol class="quiz-list">
+    <li>
+      <p>Who owns the repository contract, and why does that matter?</p>
+      <details class="answer"><summary>Reveal</summary><p>The application. The contract is phrased in its terms, so storage adapters depend on it and the use case compiles without any database package.</p></details>
+    </li>
+  </ol>
+</section>
+
+<!-- SLIDES:END -->
+</main>
+
+<footer class="controls">
+  <button class="ctl" id="prev" type="button" aria-label="Previous slide">←</button>
+  <span class="count" id="count" aria-live="polite">1 / 1</span>
+  <button class="ctl" id="next" type="button" aria-label="Next slide">→</button>
+  <button class="ctl" id="notes" type="button" aria-pressed="false">Notes</button>
+  <span class="keys">← → or space to move · N for notes</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  const slides = [...document.querySelectorAll(".slide")];
+  const rail   = document.getElementById("rail");
+  const count  = document.getElementById("count");
+  const deck   = document.getElementById("deck");
+  let current  = 0;
+
+  slides.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.kind = s.dataset.kind || "";
+    b.setAttribute("aria-label", `Slide ${i + 1}: ${s.querySelector("h1, h2")?.textContent.trim() ?? ""}`);
+    b.addEventListener("click", () => go(i));
+    rail.appendChild(b);
+  });
+
+  function go(i) {
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((s, j) => s.classList.toggle("active", j === current));
+    [...rail.children].forEach((b, j) => b.setAttribute("aria-current", String(j === current)));
+    count.textContent = `${current + 1} / ${slides.length}`;
+    deck.scrollTop = 0;
+    try { history.replaceState(null, "", `#s${current + 1}`); } catch {}
+  }
+
+  document.getElementById("prev").addEventListener("click", () => go(current - 1));
+  document.getElementById("next").addEventListener("click", () => go(current + 1));
+  const notesBtn = document.getElementById("notes");
+  function toggleNotes() {
+    const on = document.body.classList.toggle("show-notes");
+    notesBtn.setAttribute("aria-pressed", String(on));
+  }
+  notesBtn.addEventListener("click", toggleNotes);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea, summary")) return;
+    if (e.key === "ArrowRight" || e.key === "PageDown" || (e.key === " " && !e.shiftKey)) { e.preventDefault(); go(current + 1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp" || (e.key === " " && e.shiftKey)) { e.preventDefault(); go(current - 1); }
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(slides.length - 1);
+    else if (e.key.toLowerCase() === "n") toggleNotes();
+  });
+
+  const fromHash = /^#s(\d+)$/.exec(location.hash);
+  go(fromHash ? Number(fromHash[1]) - 1 : 0);
+  if (window.hljs) document.querySelectorAll("pre code").forEach((el) => hljs.highlightElement(el));
+</script>

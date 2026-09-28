@@ -83,3 +83,13 @@ function migrate(db: Database): void {
     );
   }
 }
+
+// Session of the most recent hook event. Used by manual commands (predict, verify, MCP)
+// that don't receive a session_id from Claude Code.
+// ponytail: picks the most active session; wrong if two sessions run concurrently.
+export function latestSessionId(): string | null {
+  const row = getDb().query(
+    `SELECT session_id FROM events WHERE event_type IN ('post_tool', 'user_prompt') ORDER BY ts DESC LIMIT 1`
+  ).get() as { session_id: string } | null;
+  return row?.session_id ?? null;
+}

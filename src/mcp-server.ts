@@ -3,8 +3,7 @@
  * Plum MCP Server
  *
  * Exposes Plum's skill model and cognitive event logging as MCP tools so Claude
- * can call them during a conversation. Registered in ~/.claude/settings.json
- * under mcpServers and started automatically by Claude Code.
+ * can call them during a conversation. Registered by the plugin's .mcp.json.
  *
  * Tools:
  *   get_skill_context    — returns skill scores + at-risk domains + active patterns
@@ -12,48 +11,34 @@
  *   log_independence     — records user solved independently (independence_recovery++)
  *   get_weekly_status    — returns 7-day summary metrics
  *
- * Transport: stdio with LSP Content-Length framing (standard MCP protocol)
+ * Transport: stdio, newline-delimited JSON-RPC (MCP spec)
  */
 
 import { getSkillSnapshot, getOverallHealthScore, updateSkillScore } from "./skill-model.js";
 import { detectPatterns }                                             from "./patterns.js";
-import { getDb }                                                      from "./db.js";
+import { getDb, latestSessionId }                                     from "./db.js";
+import { weeklyStatus }                                               from "./status.js";
 
-// ─── LSP framing ─────────────────────────────────────────────────────────────
+// ─── stdio framing ───────────────────────────────────────────────────────────
 
-let buffer = Buffer.alloc(0);
+let buffer = "";
 
-process.stdin.on("data", (chunk: Buffer) => {
-  buffer = Buffer.concat([buffer, chunk]);
-  processBuffer();
+process.stdin.setEncoding("utf-8");
+process.stdin.on("data", (chunk: string) => {
+  buffer += chunk;
+  let nl: number;
+  while ((nl = buffer.indexOf("\n")) !== -1) {
+    const line = buffer.slice(0, nl).trim();
+    buffer = buffer.slice(nl + 1);
+    if (!line) continue;
+    try { handleMessage(JSON.parse(line)); } catch { respondError(null, -32700, "Parse error"); }
+  }
 });
 
 process.stdin.on("end", () => process.exit(0));
 
-function processBuffer(): void {
-  while (true) {
-    const sep = buffer.indexOf("\r\n\r\n");
-    if (sep === -1) break;
-
-    const header = buffer.slice(0, sep).toString("utf-8");
-    const match  = header.match(/Content-Length:\s*(\d+)/i);
-    if (!match) { buffer = buffer.slice(sep + 4); continue; }
-
-    const len   = parseInt(match[1], 10);
-    const start = sep + 4;
-    if (buffer.length < start + len) break;
-
-    const body = buffer.slice(start, start + len).toString("utf-8");
-    buffer = buffer.slice(start + len);
-
-    try { handleMessage(JSON.parse(body)); } catch { /* skip malformed */ }
-  }
-}
-
 function send(msg: object): void {
-  const body   = JSON.stringify(msg);
-  const header = `Content-Length: ${Buffer.byteLength(body, "utf-8")}\r\n\r\n`;
-  process.stdout.write(header + body);
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
 function respond(id: unknown, result: unknown): void {
@@ -75,10 +60,14 @@ function handleMessage(msg: any): void {
   switch (method) {
     case "initialize":
       respond(id, {
-        protocolVersion: "2024-11-05",
+        protocolVersion: params?.protocolVersion ?? "2024-11-05",
         serverInfo: { name: "plum", version: "0.1.0" },
         capabilities: { tools: {} }
       });
+      break;
+
+    case "ping":
+      respond(id, {});
       break;
 
     case "tools/list":
@@ -152,12 +141,20 @@ const TOOLS = [
 
 // ─── Tool implementations ─────────────────────────────────────────────────────
 
+const DOMAINS = ["implementation", "debugging", "testing", "architecture", "synthesis"];
+
+function domainArg(args: Record<string, unknown>, fallback: string): string {
+  const d = String(args.domain ?? fallback);
+  if (!DOMAINS.includes(d)) throw new Error(`Unknown domain "${d}" — expected one of ${DOMAINS.join("|")}`);
+  return d;
+}
+
 function dispatchTool(name: string, args: Record<string, unknown>): string {
   switch (name) {
     case "get_skill_context":    return toolGetSkillContext();
     case "log_explanation":      return toolLogExplanation(args);
     case "log_independence":     return toolLogIndependence(args);
-    case "get_weekly_status":    return toolGetWeeklyStatus();
+    case "get_weekly_status":    return weeklyStatus();
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -169,9 +166,8 @@ function toolGetSkillContext(): string {
   const atRisk   = snapshot.filter((s) => s.atRisk);
 
   // Use the most recent session for pattern detection
-  const db      = getDb();
-  const session = db.query(`SELECT id FROM sessions ORDER BY started_at DESC LIMIT 1`).get() as any;
-  const patterns = session ? detectPatterns(session.id) : [];
+  const sessionId = latestSessionId();
+  const patterns  = sessionId ? detectPatterns(sessionId) : [];
 
   const lines: string[] = [
     `Professor Plum — Skill Context`,
@@ -211,8 +207,8 @@ function toolGetSkillContext(): string {
 }
 
 function toolLogExplanation(args: Record<string, unknown>): string {
-  const domain     = String(args.domain ?? "synthesis");
-  const sessionId  = String(args.session_id ?? "mcp");
+  const domain     = domainArg(args, "synthesis");
+  const sessionId  = String(args.session_id ?? latestSessionId() ?? "mcp");
   const quality    = String(args.quality ?? "full");
   const db         = getDb();
   const now        = Date.now();
@@ -237,8 +233,8 @@ function toolLogExplanation(args: Record<string, unknown>): string {
 }
 
 function toolLogIndependence(args: Record<string, unknown>): string {
-  const domain    = String(args.domain ?? "implementation");
-  const sessionId = String(args.session_id ?? "mcp");
+  const domain    = domainArg(args, "implementation");
+  const sessionId = String(args.session_id ?? latestSessionId() ?? "mcp");
   const db        = getDb();
   const now       = Date.now();
 
@@ -257,32 +253,4 @@ function toolLogIndependence(args: Record<string, unknown>): string {
   }
 
   return `[Plum] Independence logged for ${domain}. Strong positive signal — skill score updated. ✓`;
-}
-
-function toolGetWeeklyStatus(): string {
-  const db   = getDb();
-  const week = Date.now() - 604_800_000;
-  const q    = (sql: string, ...args: unknown[]) =>
-    ((db.query(sql).get(...(args as [])) as any)?.c ?? 0) as number;
-
-  const sessions      = q(`SELECT COUNT(*) as c FROM sessions WHERE started_at > ?`, week);
-  const delegated     = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1`, week);
-  const verified      = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND delegated = 1 AND verified = 1`, week);
-  const predictions   = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'predict'`, week);
-  const explanations  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'explanation'`, week);
-  const independence  = q(`SELECT COUNT(*) as c FROM events WHERE ts > ? AND event_type = 'independence'`, week);
-  const nudges        = q(`SELECT COUNT(*) as c FROM interventions WHERE ts > ?`, week);
-
-  const pct = (n: number, d: number) => d > 0 ? `${Math.round((n / d) * 100)}%` : "n/a";
-
-  return [
-    `Professor Plum — last 7 days`,
-    `  Sessions:         ${sessions}`,
-    `  Delegations:      ${delegated}`,
-    `  Verified:         ${verified}  (${pct(verified, delegated)} verify rate)`,
-    `  Predictions:      ${predictions}  (${pct(predictions, delegated)} predict rate)`,
-    `  Explanations:     ${explanations}`,
-    `  Independence:     ${independence}`,
-    `  Nudges fired:     ${nudges}`
-  ].join("\n");
 }
