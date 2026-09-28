@@ -45,8 +45,9 @@ after:   Order.canBeCancelled(clock)   # the one rule, the only thing that was e
    reads. Getting a policy by name pays off only if a second policy ever exists; it doesn't. The tests show the
    toll directly: to check one rule, a test has to construct a registry and a service and reason about hooks that
    do nothing. One test pins down a real cost of this shape: a typo in the policy name (`"stadnard"` for
-   `"standard"`) doesn't fail — the registry's `.get(..., default)` fallback swallows it silently, so a
-   misconfigured deploy behaves identically to a correct one until someone notices the *other* policy never ran.
+   `"standard"`) doesn't fail — the registry's `.get(..., default)` fallback swallows it silently and resolves
+   to the one real policy anyway, so a misconfigured deploy behaves identically to a correct one — nothing ever
+   signals that the config value was wrong.
 2. **after** — everything but the rule is gone. `Order.canBeCancelled(clock)` is the whole feature. The same three
    behavioural cases (fresh pending order, order past the window, shipped order) hold on both stages — nothing
    about *what the software does* changed, only how much of it there is to read, test and maintain.
@@ -60,7 +61,9 @@ eventually." The **rule of three** applies to abstractions as much as to duplica
 occurrence, generalize on the third, once you have two real shapes to generalize *from* instead of guessing at
 one. And some seams are earned even at one implementation: if the only way to unit-test a use case in isolation
 is to swap the concrete infrastructure for a test double, that seam is dependency inversion, not speculation — see
-`dependency-inversion` for how to tell "a seam I need to test this" from "a seam I might need someday."
+`dependency-inversion` for how to tell "a seam I need to test this" from "a seam I might need someday." YAGNI and
+`open-closed` are counterweights, not opposites: an extension point earns its place only once a real second
+variant exists, and until then the two principles agree that the plain, ungeneralized version is the right one.
 
 ## Common misconceptions
 

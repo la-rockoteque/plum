@@ -11,7 +11,8 @@
   "related": [
     "coupling-cohesion",
     "value-objects-entities",
-    "cqrs"
+    "cqrs",
+    "dry"
   ],
   "signals": [
     "a getter read immediately followed by an if/else that branches on it and then writes a different field back",

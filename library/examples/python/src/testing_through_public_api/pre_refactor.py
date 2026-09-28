@@ -1,16 +1,23 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Protocol
 
 
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    CANCELLED = "cancelled"
+
+
+@dataclass
 class Order:
-    def __init__(self, order_id: str, total: float, status: str = "placed") -> None:
-        self.id = order_id
-        self.total = total
-        self.status = status
+    id: int
+    amount_minor: int
+    status: OrderStatus = OrderStatus.PENDING
 
 
 class OrderRepository(Protocol):
-    def find_by_id(self, order_id: str) -> Order: ...
+    def find_by_id(self, order_id: int) -> Order: ...
     def save(self, order: Order) -> None: ...
 
 
@@ -20,16 +27,16 @@ class Notifier(Protocol):
 
 @dataclass
 class CancellationOutcome:
-    order_id: str
-    refund_amount: float
-    status: str
+    order_id: int
+    refund_amount_minor: int
+    status: OrderStatus
 
 
 class NotificationFormatter:
     """The unit's own internal collaborator: constructed by the service, never injected."""
 
-    def format(self, order_id: str, refund_amount: float) -> str:
-        return f"Order {order_id} cancelled; refund {refund_amount:.2f}"
+    def format(self, order_id: int, refund_amount_minor: int) -> str:
+        return f"Order {order_id} cancelled; refund {refund_amount_minor}"
 
 
 class PreRefactorService:
@@ -41,17 +48,17 @@ class PreRefactorService:
         self._fee_rate = 0.1
         self._formatter = NotificationFormatter()
 
-    def _calculate_fee(self, order: Order) -> float:
-        return round(order.total * self._fee_rate, 2)
+    def _calculate_fee(self, order: Order) -> int:
+        return round(order.amount_minor * self._fee_rate)
 
     def _transition_status(self, order: Order) -> None:
-        order.status = "cancelled"
+        order.status = OrderStatus.CANCELLED
 
-    def cancel(self, order_id: str) -> CancellationOutcome:
+    def cancel(self, order_id: int) -> CancellationOutcome:
         order = self.orders.find_by_id(order_id)
         fee = self._calculate_fee(order)
         self._transition_status(order)
-        refund = round(order.total - fee, 2)
+        refund = order.amount_minor - fee
         self.notifier.send(self._formatter.format(order_id, refund))
         self.orders.save(order)
         return CancellationOutcome(order_id, refund, order.status)

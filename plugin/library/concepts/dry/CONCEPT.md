@@ -59,9 +59,12 @@ now are not automatically one rule — see the misconception below. Extracting a
   billing address validator may share a shape by accident. Merge them and the next requirement that applies to
   only one forces an `if isBilling` branch into code that was supposed to be simple. If it isn't the same
   knowledge, let it stay duplicated.
-- **"Fix it on sight."** The **rule of three**: tolerate the second occurrence, extract on the third, once the
-  shape of the real abstraction is visible. Abstracting after one repeat guesses at a shape you don't have
-  evidence for yet.
+- **"Fix it on sight."** The **rule of three** is for *similar-looking* code whose sameness is still uncertain:
+  tolerate the second occurrence and extract on the third, once the shape of the real abstraction is visible.
+  Abstracting after one repeat guesses at a shape you don't have evidence for yet. But once two places are
+  already known to hold the *same business rule* — not merely similar-looking code, the same knowledge — extract
+  at two, the way this concept's own `CliCancelHandler` and `ApiCancelHandler` do; waiting for a third copy of a
+  rule you can already name is just carrying the drift for another release.
 - **"DRY is about line count."** A one-line rule copy-pasted twice is a DRY violation; a hundred lines of
   boilerplate that never changes together is not — DRY tracks knowledge, not character count.
 

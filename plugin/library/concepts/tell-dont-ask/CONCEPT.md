@@ -68,7 +68,11 @@ to ask it to change it, and it enforces its own rule every time.
    pending, and otherwise sets the cancelled timestamp and the refund together, in one place. All
    three callers are reduced to `order.cancel(clock)`. The same three scenarios now agree: a
    pending order cancels correctly no matter which caller asked, and a shipped order is rejected
-   no matter which caller asked — the invalid transition is caught once, not per caller.
+   no matter which caller asked — the invalid transition is caught once, not per caller. This is a
+   deliberate behaviour change for `NightlyCancelJob`: before, it silently skipped a shipped order
+   (the same `if status != pending: return` as every other case it didn't handle); after, calling
+   it on a shipped order raises, the same as every other caller — a caller that used to fail quietly
+   now fails loudly, which is the point of centralising the rule.
 
 ## Trade-offs / when not to
 
@@ -97,6 +101,11 @@ job's cursor) don't need Order-style encapsulation just because Order does.
   reading — see `cqrs`. The problem in the before version isn't that `Order` has fields; it's that
   a business rule about *when those fields may change* was left to be reimplemented by every
   caller instead of owned by the object the rule is about.
+- **"This is the same fix as `dry`."** Both move duplicated knowledge onto `Order`, but they move
+  different halves of it: `dry` moves a *query* — a read-only rule like "can this be cancelled?" —
+  onto the object so every caller asks the same question; tell-don't-ask moves the *command* — the
+  decision and the state change themselves — so every caller stops deciding and writing the answer
+  back on the object's behalf.
 
 ## References
 

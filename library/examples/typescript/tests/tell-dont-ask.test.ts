@@ -17,7 +17,7 @@ import {
   OrderStatus as BeforeOrderStatus,
 } from "../src/tell-dont-ask/before.js";
 
-class FakeClock implements BeforeClock, AfterClock {
+class FixedClock implements BeforeClock, AfterClock {
   constructor(private readonly ms: number) {}
   nowMs(): number {
     return this.ms;
@@ -26,7 +26,7 @@ class FakeClock implements BeforeClock, AfterClock {
 
 test("before: api handler cancels a pending order and sets the refund", () => {
   const order = new BeforeOrder(1, BeforeOrderStatus.Pending, 5000);
-  new BeforeApiCancelHandler().cancel(order, new FakeClock(1000));
+  new BeforeApiCancelHandler().cancel(order, new FixedClock(1000));
   assert.equal(order.status, BeforeOrderStatus.Cancelled);
   assert.equal(order.cancelledAtMs, 1000);
   assert.equal(order.refundDueCents, 5000);
@@ -34,7 +34,7 @@ test("before: api handler cancels a pending order and sets the refund", () => {
 
 test("before: nightly job cancels a stale order but leaves the refund unset", () => {
   const order = new BeforeOrder(2, BeforeOrderStatus.Pending, 5000);
-  new BeforeNightlyCancelJob().cancel(order, new FakeClock(1000));
+  new BeforeNightlyCancelJob().cancel(order, new FixedClock(1000));
   assert.equal(order.status, BeforeOrderStatus.Cancelled);
   assert.equal(order.cancelledAtMs, 1000);
   assert.equal(order.refundDueCents, 0); // bug: the payment is gone, no refund recorded
@@ -42,12 +42,12 @@ test("before: nightly job cancels a stale order but leaves the refund unset", ()
 
 test("before: admin tool cancels an already shipped order", () => {
   const order = new BeforeOrder(3, BeforeOrderStatus.Shipped, 5000, 500);
-  new BeforeAdminCancelTool().cancel(order, new FakeClock(1000));
+  new BeforeAdminCancelTool().cancel(order, new FixedClock(1000));
   assert.equal(order.status, BeforeOrderStatus.Cancelled); // bug: a shipped order should stay shipped
 });
 
 test("after: api handler nightly job and admin tool all cancel the same way", () => {
-  const clock = new FakeClock(1000);
+  const clock = new FixedClock(1000);
   const cases: Array<[{ cancel(order: AfterOrder, clock: AfterClock): void }, AfterOrder]> = [
     [new AfterApiCancelHandler(), new AfterOrder(1, AfterOrderStatus.Pending, 5000)],
     [new AfterNightlyCancelJob(), new AfterOrder(2, AfterOrderStatus.Pending, 5000)],
@@ -62,7 +62,7 @@ test("after: api handler nightly job and admin tool all cancel the same way", ()
 });
 
 test("after: cancelling an already shipped order is rejected", () => {
-  const clock = new FakeClock(1000);
+  const clock = new FixedClock(1000);
   const handlers: Array<{ cancel(order: AfterOrder, clock: AfterClock): void }> = [
     new AfterApiCancelHandler(),
     new AfterNightlyCancelJob(),

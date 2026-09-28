@@ -51,7 +51,7 @@ class YagniKissTest {
     }
 
     @Test
-    fun `before - the unused cancellation hooks are never invoked`() {
+    fun `before - the unused cancellation hooks are empty by default`() {
         val service = OrderCancellationService()
         assertTrue(service.hooks.onBeforeCancel.isEmpty())
         assertTrue(service.hooks.onAfterCancel.isEmpty())

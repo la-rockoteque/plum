@@ -8,14 +8,14 @@ public sealed class PostRefactorService(IOrderRepository orders, INotifier notif
     private readonly decimal _cancellationFeeRate = 0.1m;
     private readonly INotificationFormatter _formatter = new NotificationFormatter();
 
-    private static void TransitionStatus(Order order) => order.Status = "cancelled";
+    private static void TransitionStatus(Order order) => order.Status = OrderStatus.Cancelled;
 
-    public CancellationOutcome Cancel(string orderId)
+    public CancellationOutcome Cancel(int orderId)
     {
         var order = orders.FindById(orderId);
-        var fee = Math.Round(order.Total * _cancellationFeeRate, 2); // CalculateFee() inlined here
+        var fee = (int)Math.Round(order.AmountMinor * _cancellationFeeRate); // CalculateFee() inlined here
         TransitionStatus(order);
-        var refund = Math.Round(order.Total - fee, 2);
+        var refund = order.AmountMinor - fee;
         notifier.Send(_formatter.Format(orderId, refund));
         orders.Save(order);
         return new CancellationOutcome(orderId, refund, order.Status);

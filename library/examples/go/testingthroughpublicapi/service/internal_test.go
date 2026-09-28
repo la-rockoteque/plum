@@ -6,28 +6,36 @@ import (
 	"testing"
 )
 
+func cloneOrder(order *Order) *Order {
+	clone := *order
+	return &clone
+}
+
+// inMemoryOrderRepository is a fake with real find/save behaviour, no external system. It copies
+// on write and read, so a caller can't observe state through a reference it never went through
+// the repository for.
 type inMemoryOrderRepository struct {
-	orders map[string]*Order
+	orders map[int]*Order
 }
 
 func newInMemoryOrderRepository(orders ...*Order) *inMemoryOrderRepository {
-	byID := make(map[string]*Order, len(orders))
+	byID := make(map[int]*Order, len(orders))
 	for _, order := range orders {
-		byID[order.ID] = order
+		byID[order.ID] = cloneOrder(order)
 	}
 	return &inMemoryOrderRepository{orders: byID}
 }
 
-func (r *inMemoryOrderRepository) FindByID(orderID string) (*Order, error) {
+func (r *inMemoryOrderRepository) FindByID(orderID int) (*Order, error) {
 	order, ok := r.orders[orderID]
 	if !ok {
-		return nil, fmt.Errorf("unknown order %s", orderID)
+		return nil, fmt.Errorf("unknown order %d", orderID)
 	}
-	return order, nil
+	return cloneOrder(order), nil
 }
 
 func (r *inMemoryOrderRepository) Save(order *Order) error {
-	r.orders[order.ID] = order
+	r.orders[order.ID] = cloneOrder(order)
 	return nil
 }
 
@@ -42,18 +50,18 @@ func (n *spyNotifier) Send(message string) error {
 
 // mockFormatter is a hand-rolled double for the service's OWN internal collaborator - not a port.
 type mockFormatter struct {
-	calledOrderID string
-	calledRefund  float64
+	calledOrderID int
+	calledRefund  int
 	called        bool
 }
 
-func (m *mockFormatter) format(orderID string, refundAmount float64) string {
-	m.calledOrderID, m.calledRefund, m.called = orderID, refundAmount, true
+func (m *mockFormatter) format(orderID int, refundAmountMinor int) string {
+	m.calledOrderID, m.calledRefund, m.called = orderID, refundAmountMinor, true
 	return "mocked notification"
 }
 
 func anOrder() *Order {
-	return NewOrder("order-1", 50.0)
+	return NewOrder(1, 5000)
 }
 
 // --- before: internal-poking tests --------------------------------------------------------------
@@ -62,8 +70,8 @@ func TestBefore_PokingThePrivateFeeHelperAndFieldPassesAgainstThePreRefactorImpl
 	order := anOrder()
 	service := NewPreRefactorService(newInMemoryOrderRepository(order), &spyNotifier{})
 	// Reach past Cancel() and call the private helper directly.
-	if fee := service.calculateFee(order); fee != 5.0 {
-		t.Fatalf("got fee %v, want 5.0", fee)
+	if fee := service.calculateFee(order); fee != 500 {
+		t.Fatalf("got fee %v, want 500", fee)
 	}
 	// Assert on a private field instead of an observable outcome.
 	if service.feeRate != 0.1 {
@@ -76,11 +84,11 @@ func TestBefore_MockingTheServicesOwnFormatterPassesButCouplesTheTestToImplement
 	service := NewPreRefactorService(newInMemoryOrderRepository(order), &spyNotifier{})
 	mock := &mockFormatter{}
 	service.formatter = mock // reach in and replace a collaborator the service built for itself
-	if _, err := service.Cancel("order-1"); err != nil {
+	if _, err := service.Cancel(1); err != nil {
 		t.Fatal(err)
 	}
-	if !mock.called || mock.calledOrderID != "order-1" || mock.calledRefund != 45.0 {
-		t.Fatalf("expected the mock formatter to be called with order-1, 45.0; got %+v", mock)
+	if !mock.called || mock.calledOrderID != 1 || mock.calledRefund != 4500 {
+		t.Fatalf("expected the mock formatter to be called with 1, 4500; got %+v", mock)
 	}
 }
 

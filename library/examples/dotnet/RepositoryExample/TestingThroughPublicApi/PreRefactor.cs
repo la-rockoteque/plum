@@ -1,15 +1,22 @@
 namespace RepositoryExample.TestingThroughPublicApi;
 
-public sealed class Order(string id, decimal total)
+public enum OrderStatus
 {
-    public string Id { get; } = id;
-    public decimal Total { get; } = total;
-    public string Status { get; set; } = "placed";
+    Pending,
+    Shipped,
+    Cancelled,
+}
+
+public sealed class Order(int id, int amountMinor)
+{
+    public int Id { get; } = id;
+    public int AmountMinor { get; } = amountMinor;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
 }
 
 public interface IOrderRepository
 {
-    Order FindById(string orderId);
+    Order FindById(int orderId);
     void Save(Order order);
 }
 
@@ -18,17 +25,17 @@ public interface INotifier
     void Send(string message);
 }
 
-public sealed record CancellationOutcome(string OrderId, decimal RefundAmount, string Status);
+public sealed record CancellationOutcome(int OrderId, int RefundAmountMinor, OrderStatus Status);
 
 // The unit's own internal collaborator: constructed by the service, never injected.
 public interface INotificationFormatter
 {
-    string Format(string orderId, decimal refundAmount);
+    string Format(int orderId, int refundAmountMinor);
 }
 
 public sealed class NotificationFormatter : INotificationFormatter
 {
-    public string Format(string orderId, decimal refundAmount) => $"Order {orderId} cancelled; refund {refundAmount:F2}";
+    public string Format(int orderId, int refundAmountMinor) => $"Order {orderId} cancelled; refund {refundAmountMinor}";
 }
 
 // Before the refactor: a separate fee helper and a plainly-named rate field.
@@ -37,16 +44,16 @@ public sealed class PreRefactorService(IOrderRepository orders, INotifier notifi
     private readonly decimal _feeRate = 0.1m;
     private readonly INotificationFormatter _formatter = new NotificationFormatter();
 
-    private decimal CalculateFee(Order order) => Math.Round(order.Total * _feeRate, 2);
+    private int CalculateFee(Order order) => (int)Math.Round(order.AmountMinor * _feeRate);
 
-    private static void TransitionStatus(Order order) => order.Status = "cancelled";
+    private static void TransitionStatus(Order order) => order.Status = OrderStatus.Cancelled;
 
-    public CancellationOutcome Cancel(string orderId)
+    public CancellationOutcome Cancel(int orderId)
     {
         var order = orders.FindById(orderId);
         var fee = CalculateFee(order);
         TransitionStatus(order);
-        var refund = Math.Round(order.Total - fee, 2);
+        var refund = order.AmountMinor - fee;
         notifier.Send(_formatter.Format(orderId, refund));
         orders.Save(order);
         return new CancellationOutcome(orderId, refund, order.Status);

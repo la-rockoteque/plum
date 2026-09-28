@@ -43,7 +43,7 @@ test("before: a typo in the policy config name silently falls back to the defaul
   assert.equal(typoNamed.canCancel(order, clock), correctlyNamed.canCancel(order, clock));
 });
 
-test("before: the unused cancellation hooks are never invoked", () => {
+test("before: the unused cancellation hooks are empty by default", () => {
   const service = new OrderCancellationService();
   assert.deepEqual(service.hooks.onBeforeCancel, []);
   assert.deepEqual(service.hooks.onAfterCancel, []);

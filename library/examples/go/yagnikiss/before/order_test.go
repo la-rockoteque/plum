@@ -50,7 +50,7 @@ func TestBefore_ATypoInThePolicyConfigNameSilentlyFallsBackToTheDefaultPolicy(t 
 	}
 }
 
-func TestBefore_TheUnusedCancellationHooksAreNeverInvoked(t *testing.T) {
+func TestBefore_TheUnusedCancellationHooksAreEmptyByDefault(t *testing.T) {
 	service := before.NewOrderCancellationService("", nil)
 	if len(service.Hooks.OnBeforeCancel) != 0 || len(service.Hooks.OnAfterCancel) != 0 {
 		t.Fatal("want no hooks wired by default")

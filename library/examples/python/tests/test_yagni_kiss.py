@@ -42,7 +42,7 @@ def test_before_a_typo_in_the_policy_config_name_silently_falls_back_to_the_defa
     assert typo_named.can_cancel(order, clock) == correctly_named.can_cancel(order, clock)
 
 
-def test_before_the_unused_cancellation_hooks_are_never_invoked() -> None:
+def test_before_the_unused_cancellation_hooks_are_empty_by_default() -> None:
     service = OrderCancellationService()
     assert service.hooks.on_before_cancel == []
     assert service.hooks.on_after_cancel == []

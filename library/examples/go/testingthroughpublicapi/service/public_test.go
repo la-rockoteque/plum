@@ -7,28 +7,36 @@ import (
 	"example.com/repository-example/testingthroughpublicapi/service"
 )
 
+func cloneOrder(order *service.Order) *service.Order {
+	clone := *order
+	return &clone
+}
+
+// inMemoryOrderRepository is a fake with real find/save behaviour, no external system. It copies
+// on write and read, so a caller can't observe state through a reference it never went through
+// the repository for.
 type inMemoryOrderRepository struct {
-	orders map[string]*service.Order
+	orders map[int]*service.Order
 }
 
 func newInMemoryOrderRepository(orders ...*service.Order) *inMemoryOrderRepository {
-	byID := make(map[string]*service.Order, len(orders))
+	byID := make(map[int]*service.Order, len(orders))
 	for _, order := range orders {
-		byID[order.ID] = order
+		byID[order.ID] = cloneOrder(order)
 	}
 	return &inMemoryOrderRepository{orders: byID}
 }
 
-func (r *inMemoryOrderRepository) FindByID(orderID string) (*service.Order, error) {
+func (r *inMemoryOrderRepository) FindByID(orderID int) (*service.Order, error) {
 	order, ok := r.orders[orderID]
 	if !ok {
-		return nil, fmt.Errorf("unknown order %s", orderID)
+		return nil, fmt.Errorf("unknown order %d", orderID)
 	}
-	return order, nil
+	return cloneOrder(order), nil
 }
 
 func (r *inMemoryOrderRepository) Save(order *service.Order) error {
-	r.orders[order.ID] = order
+	r.orders[order.ID] = cloneOrder(order)
 	return nil
 }
 
@@ -42,29 +50,29 @@ func (n *spyNotifier) Send(message string) error {
 }
 
 func anOrder() *service.Order {
-	return service.NewOrder("order-1", 50.0)
+	return service.NewOrder(1, 5000)
 }
 
 // cancelOrderOnce is the SAME public-API test case, run unmodified against both implementations.
-func cancelOrderOnce(t *testing.T, cancel func(orderID string) (service.CancellationOutcome, error), orders *inMemoryOrderRepository, notifier *spyNotifier) {
+func cancelOrderOnce(t *testing.T, cancel func(orderID int) (service.CancellationOutcome, error), orders *inMemoryOrderRepository, notifier *spyNotifier) {
 	t.Helper()
-	outcome, err := cancel("order-1")
+	outcome, err := cancel(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if outcome.OrderID != "order-1" || outcome.RefundAmount != 45.0 || outcome.Status != "cancelled" {
+	if outcome.OrderID != 1 || outcome.RefundAmountMinor != 4500 || outcome.Status != service.Cancelled {
 		t.Fatalf("unexpected outcome: %+v", outcome)
 	}
 	// Observable via the fake repository: state was actually persisted.
-	saved, err := orders.FindByID("order-1")
+	saved, err := orders.FindByID(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Status != "cancelled" {
+	if saved.Status != service.Cancelled {
 		t.Fatalf("got status %q, want cancelled", saved.Status)
 	}
 	// Observable via the notifier spy: the right message was sent.
-	want := []string{"Order order-1 cancelled; refund 45.00"}
+	want := []string{"Order 1 cancelled; refund 4500"}
 	if len(notifier.sent) != 1 || notifier.sent[0] != want[0] {
 		t.Fatalf("got %v, want %v", notifier.sent, want)
 	}

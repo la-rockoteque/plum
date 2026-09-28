@@ -11,14 +11,14 @@ class PostRefactorService(
     private val formatter: NotificationFormatter = DefaultNotificationFormatter()
 
     private fun transitionStatus(order: Order) {
-        order.status = "cancelled"
+        order.status = OrderStatus.CANCELLED
     }
 
-    fun cancel(orderId: String): CancellationOutcome {
+    fun cancel(orderId: Int): CancellationOutcome {
         val order = orders.findById(orderId)
-        val fee = Math.round(order.total * cancellationFeeRate * 100) / 100.0 // calculateFee() inlined here
+        val fee = Math.round(order.amountMinor * cancellationFeeRate).toInt() // calculateFee() inlined here
         transitionStatus(order)
-        val refund = Math.round((order.total - fee) * 100) / 100.0
+        val refund = order.amountMinor - fee
         notifier.send(formatter.format(orderId, refund))
         orders.save(order)
         return CancellationOutcome(orderId, refund, order.status)

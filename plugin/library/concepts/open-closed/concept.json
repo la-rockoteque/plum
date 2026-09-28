@@ -9,7 +9,8 @@
     "single-responsibility"
   ],
   "related": [
-    "dependency-inversion"
+    "dependency-inversion",
+    "yagni-kiss"
   ],
   "signals": [
     "the same type switch repeated across files (a fee calculator and a refund-message builder both branch on the same enum)",
@@ -33,7 +34,7 @@
     {
       "id": "after",
       "title": "One policy per type, chosen once",
-      "idea": "Each order type is a FeePolicy owning both its fee and its refund description; the calculator picks one from a map. A new type is a new policy added to the map — no existing file changes."
+      "idea": "Each order type is a FeePolicy owning both its fee and its refund description; the calculator picks one from a map. A new type is a new policy class plus one new entry registered in the map — the calculator and every existing policy stay closed; registering the entry is the one allowed edit."
     }
   ],
   "checks": [

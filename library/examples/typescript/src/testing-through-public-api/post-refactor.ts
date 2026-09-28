@@ -1,17 +1,23 @@
+export enum OrderStatus {
+  Pending = "pending",
+  Shipped = "shipped",
+  Cancelled = "cancelled",
+}
+
 export class Order {
-  status: string;
+  status: OrderStatus;
 
   constructor(
-    public readonly id: string,
-    public readonly total: number,
-    status = "placed",
+    public readonly id: number,
+    public readonly amountMinor: number,
+    status = OrderStatus.Pending,
   ) {
     this.status = status;
   }
 }
 
 export interface OrderRepository {
-  findById(orderId: string): Order;
+  findById(orderId: number): Order;
   save(order: Order): void;
 }
 
@@ -20,15 +26,15 @@ export interface Notifier {
 }
 
 export interface CancellationOutcome {
-  orderId: string;
-  refundAmount: number;
-  status: string;
+  orderId: number;
+  refundAmountMinor: number;
+  status: OrderStatus;
 }
 
 // The unit's own internal collaborator: constructed by the service, never injected.
 export class NotificationFormatter {
-  format(orderId: string, refundAmount: number): string {
-    return `Order ${orderId} cancelled; refund ${refundAmount.toFixed(2)}`;
+  format(orderId: number, refundAmountMinor: number): string {
+    return `Order ${orderId} cancelled; refund ${refundAmountMinor}`;
   }
 }
 
@@ -45,17 +51,17 @@ export class PostRefactorService {
   ) {}
 
   private transitionStatus(order: Order): void {
-    order.status = "cancelled";
+    order.status = OrderStatus.Cancelled;
   }
 
-  cancel(orderId: string): CancellationOutcome {
+  cancel(orderId: number): CancellationOutcome {
     const order = this.orders.findById(orderId);
     // calculateFee() inlined here:
-    const fee = Math.round(order.total * this.cancellationFeeRate * 100) / 100;
+    const fee = Math.round(order.amountMinor * this.cancellationFeeRate);
     this.transitionStatus(order);
-    const refundAmount = Math.round((order.total - fee) * 100) / 100;
-    this.notifier.send(this.formatter.format(orderId, refundAmount));
+    const refundAmountMinor = order.amountMinor - fee;
+    this.notifier.send(this.formatter.format(orderId, refundAmountMinor));
     this.orders.save(order);
-    return { orderId, refundAmount, status: order.status };
+    return { orderId, refundAmountMinor, status: order.status };
   }
 }

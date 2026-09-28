@@ -23,8 +23,9 @@ the module itself. "Closed" doesn't mean "never touched again forever" — it me
 switches, and classes that already handle the known cases don't need to change shape when one more case shows up.
 Concretely: replace the type switch with a small interface (one policy per type) and a lookup keyed by type. The
 calculator that used to ask "which type is this, and what do I do for it?" now just asks the map for the right
-policy and delegates. Adding a type means writing one new class and registering it — every existing policy,
-and the calculator itself, is unchanged.
+policy and delegates. Adding a type means writing one new class and registering it in the map that wires types to
+policies — every existing policy class, and the calculator itself, is unchanged; only that one composition-root
+map gains an entry.
 
 ```text
 before:  CancellationFeeCalculator --switch(type)--> fee
@@ -32,7 +33,8 @@ before:  CancellationFeeCalculator --switch(type)--> fee
 
 after:   type -> policy map -> FeePolicy.fee(order)
                              -> FeePolicy.describeRefund(order)
-         (a new type = a new policy in the map; no existing file is edited)
+         (a new type = a new policy class + one new entry in the map; the calculator and every existing
+          policy stay closed — registering the new entry is the one allowed edit)
 ```
 
 ## Roles — find them in any codebase
@@ -55,8 +57,14 @@ after:   type -> policy map -> FeePolicy.fee(order)
 2. **after** — `FeePolicy` declares `fee` and `describeRefund` together, so a type's fee logic and its refund
    message live in one class and can't drift apart. `CancellationFeeCalculator` holds a map from type to policy
    and only ever calls through it. The test that adds a `gift` policy defines one new class implementing
-   `FeePolicy`, adds one entry to a copy of the map, and calls the existing calculator — no existing policy
-   class, and no line of `CancellationFeeCalculator`, changes.
+   `FeePolicy` and adds one entry to a copy of the map, then calls the existing calculator — no existing policy
+   class, and no line of `CancellationFeeCalculator`, changes. In real use that new entry lands in the one shared
+   map (`DEFAULT_POLICIES` / `defaultPolicies()`, the composition root); registering it there is the single edit
+   the principle allows — the calculator and every existing policy still stay closed.
+
+   This example's `Order` keeps money as a float `amount` and status as a bare `pending: bool` rather than this
+   library's usual integer minor units and `OrderStatus` — a deliberate simplification kept here (and reused
+   verbatim by `replace-conditional-with-polymorphism`) so the lesson stays about the switch, not the idioms.
 
 ## Trade-offs / when not to
 
@@ -66,7 +74,9 @@ variant of the same behavior actually exists and a third is plausible — not be
 order type and no second type in sight doesn't need a `FeePolicy` interface; it needs the straightforward
 conditional, or no conditional at all. Building the extension point before there's a second real case to extend it
 with is guessing at a shape you don't have evidence for, and the guess is often wrong: the map, the interface, and
-the naming all get designed around one example.
+the naming all get designed around one example. `yagni-kiss` and open-closed are counterweights, not opposites:
+an extension point earns its place only once a real second variant exists, and until then the two principles
+agree that the plain, ungeneralized version is the right one.
 
 ## Common misconceptions
 

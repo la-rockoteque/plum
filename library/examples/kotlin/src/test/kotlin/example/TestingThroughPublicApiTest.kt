@@ -5,6 +5,7 @@ import example.testingthroughpublicapi.NotificationFormatter
 import example.testingthroughpublicapi.Notifier
 import example.testingthroughpublicapi.Order
 import example.testingthroughpublicapi.OrderRepository
+import example.testingthroughpublicapi.OrderStatus
 import example.testingthroughpublicapi.PostRefactorService
 import example.testingthroughpublicapi.PreRefactorService
 import kotlin.test.Test
@@ -13,14 +14,18 @@ import kotlin.test.assertNull
 
 class TestingThroughPublicApiTest {
 
-    // Fake: real find/save behaviour, no external system.
+    // Fake: real find/save behaviour, no external system. Copies on write and read, so a caller
+    // can't observe state through a reference it never went through the repository for.
     private class InMemoryOrderRepository(vararg orders: Order) : OrderRepository {
         private val orders = orders.associateByTo(mutableMapOf()) { it.id }
 
-        override fun findById(orderId: String): Order = orders.getValue(orderId)
+        override fun findById(orderId: Int): Order {
+            val stored = orders.getValue(orderId)
+            return Order(stored.id, stored.amountMinor).apply { status = stored.status }
+        }
 
         override fun save(order: Order) {
-            orders[order.id] = order
+            orders[order.id] = Order(order.id, order.amountMinor).apply { status = order.status }
         }
     }
 
@@ -35,17 +40,17 @@ class TestingThroughPublicApiTest {
 
     // A hand-rolled double for the service's OWN internal collaborator - not a port.
     private class MockNotificationFormatter : NotificationFormatter {
-        var calledOrderId: String? = null
-        var calledRefundAmount: Double? = null
+        var calledOrderId: Int? = null
+        var calledRefundAmountMinor: Int? = null
 
-        override fun format(orderId: String, refundAmount: Double): String {
+        override fun format(orderId: Int, refundAmountMinor: Int): String {
             calledOrderId = orderId
-            calledRefundAmount = refundAmount
+            calledRefundAmountMinor = refundAmountMinor
             return "mocked notification"
         }
     }
 
-    private fun anOrder() = Order("order-1", 50.0)
+    private fun anOrder() = Order(1, 5000)
 
     // --- before: internal-poking tests, via reflection since Kotlin private is truly private ---
 
@@ -57,7 +62,7 @@ class TestingThroughPublicApiTest {
         // Reach past cancel() and call the private helper directly.
         val calculateFee = service.javaClass.getDeclaredMethod("calculateFee", Order::class.java)
         calculateFee.isAccessible = true
-        assertEquals(5.0, calculateFee.invoke(service, order) as Double)
+        assertEquals(500, calculateFee.invoke(service, order) as Int)
 
         // Assert on a private field instead of an observable outcome.
         val feeRate = service.javaClass.getDeclaredField("feeRate")
@@ -75,10 +80,10 @@ class TestingThroughPublicApiTest {
         formatter.isAccessible = true
         formatter.set(service, mock)
 
-        service.cancel("order-1")
+        service.cancel(1)
 
-        assertEquals("order-1", mock.calledOrderId)
-        assertEquals(45.0, mock.calledRefundAmount)
+        assertEquals(1, mock.calledOrderId)
+        assertEquals(4500, mock.calledRefundAmountMinor)
     }
 
     @Test
@@ -98,20 +103,20 @@ class TestingThroughPublicApiTest {
     // --- after: public-API tests, run unmodified against both implementations -------------------
 
     private fun assertCancellingOrder1BehavesCorrectly(
-        cancel: (String) -> CancellationOutcome,
+        cancel: (Int) -> CancellationOutcome,
         orders: InMemoryOrderRepository,
         notifier: SpyNotifier,
     ) {
-        val outcome = cancel("order-1")
-        assertEquals("order-1", outcome.orderId)
-        assertEquals(45.0, outcome.refundAmount)
-        assertEquals("cancelled", outcome.status)
+        val outcome = cancel(1)
+        assertEquals(1, outcome.orderId)
+        assertEquals(4500, outcome.refundAmountMinor)
+        assertEquals(OrderStatus.CANCELLED, outcome.status)
 
         // Observable via the fake repository: state was actually persisted.
-        assertEquals("cancelled", orders.findById("order-1").status)
+        assertEquals(OrderStatus.CANCELLED, orders.findById(1).status)
 
         // Observable via the notifier spy: the right message was sent.
-        assertEquals(listOf("Order order-1 cancelled; refund 45.00"), notifier.sent)
+        assertEquals(listOf("Order 1 cancelled; refund 4500"), notifier.sent)
     }
 
     @Test

@@ -54,7 +54,7 @@ public class YagniKissTests
     }
 
     [Fact]
-    public void Before_TheUnusedCancellationHooksAreNeverInvoked()
+    public void Before_TheUnusedCancellationHooksAreEmptyByDefault()
     {
         var service = new YagniKissBefore.OrderCancellationService();
         Assert.Empty(service.Hooks.OnBeforeCancel);

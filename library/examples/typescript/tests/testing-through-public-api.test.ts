@@ -5,26 +5,32 @@ import {
   Notifier,
   Order,
   OrderRepository,
+  OrderStatus,
   PostRefactorService,
 } from "../src/testing-through-public-api/post-refactor.js";
 import { PreRefactorService } from "../src/testing-through-public-api/pre-refactor.js";
 
-// Fake: real find/save behaviour, no external system.
+function cloneOrder(order: Order): Order {
+  return new Order(order.id, order.amountMinor, order.status);
+}
+
+// Fake: real find/save behaviour, no external system. Copies on write and read, so a caller
+// can't observe state through a reference it never went through the repository for.
 class InMemoryOrderRepository implements OrderRepository {
-  private readonly orders = new Map<string, Order>();
+  private readonly orders = new Map<number, Order>();
 
   constructor(orders: Order[]) {
-    for (const order of orders) this.orders.set(order.id, order);
+    for (const order of orders) this.orders.set(order.id, cloneOrder(order));
   }
 
-  findById(orderId: string): Order {
+  findById(orderId: number): Order {
     const order = this.orders.get(orderId);
     if (!order) throw new Error(`unknown order ${orderId}`);
-    return order;
+    return cloneOrder(order);
   }
 
   save(order: Order): void {
-    this.orders.set(order.id, order);
+    this.orders.set(order.id, cloneOrder(order));
   }
 }
 
@@ -39,16 +45,16 @@ class SpyNotifier implements Notifier {
 
 // A hand-rolled double for the service's OWN internal collaborator - not a port.
 class MockNotificationFormatter {
-  calledWith: [string, number] | undefined;
+  calledWith: [number, number] | undefined;
 
-  format(orderId: string, refundAmount: number): string {
-    this.calledWith = [orderId, refundAmount];
+  format(orderId: number, refundAmountMinor: number): string {
+    this.calledWith = [orderId, refundAmountMinor];
     return "mocked notification";
   }
 }
 
-function anOrder(id = "order-1", total = 50): Order {
-  return new Order(id, total);
+function anOrder(id = 1, amountMinor = 5000): Order {
+  return new Order(id, amountMinor);
 }
 
 // --- before: internal-poking tests -------------------------------------------------------------
@@ -58,7 +64,7 @@ test("before: poking the private fee helper and field passes against the pre-ref
   const service = new PreRefactorService(new InMemoryOrderRepository([order]), new SpyNotifier());
   const internals = service as unknown as { calculateFee(order: Order): number; feeRate: number };
   // Reach past cancel() and call the private helper directly.
-  assert.equal(internals.calculateFee(order), 5);
+  assert.equal(internals.calculateFee(order), 500);
   // Assert on a private field instead of an observable outcome.
   assert.equal(internals.feeRate, 0.1);
 });
@@ -69,8 +75,8 @@ test("before: mocking the service's own formatter passes but couples the test to
   const mockFormatter = new MockNotificationFormatter();
   // Reach in and replace a collaborator the service built for itself.
   (service as unknown as { formatter: MockNotificationFormatter }).formatter = mockFormatter;
-  service.cancel("order-1");
-  assert.deepEqual(mockFormatter.calledWith, ["order-1", 45]);
+  service.cancel(1);
+  assert.deepEqual(mockFormatter.calledWith, [1, 4500]);
 });
 
 test("before: the same private-poking assertions no longer hold after a pure refactor", () => {
@@ -89,16 +95,16 @@ test("before: the same private-poking assertions no longer hold after a pure ref
 function assertCancellingOrder1BehavesCorrectly(service: {
   orders: OrderRepository;
   notifier: Notifier;
-  cancel(orderId: string): CancellationOutcome;
+  cancel(orderId: number): CancellationOutcome;
 }): void {
-  const outcome = service.cancel("order-1");
-  assert.equal(outcome.orderId, "order-1");
-  assert.equal(outcome.refundAmount, 45);
-  assert.equal(outcome.status, "cancelled");
+  const outcome = service.cancel(1);
+  assert.equal(outcome.orderId, 1);
+  assert.equal(outcome.refundAmountMinor, 4500);
+  assert.equal(outcome.status, OrderStatus.Cancelled);
   // Observable via the fake repository: state was actually persisted.
-  assert.equal(service.orders.findById("order-1").status, "cancelled");
+  assert.equal(service.orders.findById(1).status, OrderStatus.Cancelled);
   // Observable via the notifier spy: the right message was sent.
-  assert.deepEqual((service.notifier as SpyNotifier).sent, ["Order order-1 cancelled; refund 45.00"]);
+  assert.deepEqual((service.notifier as SpyNotifier).sent, ["Order 1 cancelled; refund 4500"]);
 }
 
 test("after: cancelling through the public api behaves identically against the pre-refactor implementation", () => {

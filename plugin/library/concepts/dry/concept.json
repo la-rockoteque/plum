@@ -7,7 +7,9 @@
   "summary": "Every piece of knowledge should have one authoritative place to live, so a rule fixed once is fixed everywhere.",
   "prerequisites": [],
   "related": [
-    "repository"
+    "yagni-kiss",
+    "tell-dont-ask",
+    "coupling-cohesion"
   ],
   "signals": [
     "the same conditional (status checks, date-window math) repeated across two handlers or controllers",

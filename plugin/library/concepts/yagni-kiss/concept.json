@@ -9,7 +9,8 @@
     "dry"
   ],
   "related": [
-    "dependency-inversion"
+    "dependency-inversion",
+    "open-closed"
   ],
   "signals": [
     "a `Strategy`/`Policy` interface with exactly one production implementation and no second caller",
