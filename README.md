@@ -45,6 +45,24 @@ User prompts → Claude Code tools
 | Architecture | Outsourcing all design decisions |
 | Synthesis | Accepting explanations without engagement |
 
+### How the score works
+
+Each domain's score is how much **you** engaged with your own requests in that domain over the last 30 days — not
+how many tool calls Claude made. Every prompt you send is a request, and it counts as engaged by what you do around it:
+
+| You… | Weight |
+|---|---|
+| solved it yourself (`plum independent`) | 3 (a fully engaged request of its own) |
+| explained the result back, fully | 2 |
+| predicted before asking (`/plum:predict`) | 1 |
+| explained it back partially, or ran `plum verify` | 1 |
+
+A request's value is its weight capped at 3, divided by 3. The score is `100 × (Σ values + 2) / (requests + 4)`: 50
+with no data, and a handful of events can't push it to 0 or 100. Claude's own test runs and file reads are neutral.
+The trend compares the last 7 days with the 7 before; a domain is flagged at risk below 35 with at least 10 requests.
+Scores are computed from your events each time, so there's no running total to drift. The old running score is still
+recorded for research exports (`skill_scores` in `plum export`).
+
 ---
 
 ## Interventions (non-blocking by default)

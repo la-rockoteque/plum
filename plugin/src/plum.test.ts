@@ -101,9 +101,17 @@ test("week-wide patterns cool down across sessions, not per session", () => {
   expect(s2).not.toContain("debugging");
 });
 
+test("plum verify records a manual_verify event (it counts as engagement)", () => {
+  hook("user-prompt", { prompt: "add a field" });
+  hook("post-tool", { tool_name: "Edit", tool_input: { file_path: "/repo/a.ts" } });
+  expect(run(["verify"])).toContain("Marked 1 delegation");
+  const row = db().query(`SELECT session_id FROM events WHERE event_type = 'manual_verify'`).get() as any;
+  expect(row.session_id).toBe("s1");
+});
+
 test("context suggests library concepts for at-risk domains", () => {
-  hook("post-tool", { tool_name: "Bash", tool_input: { command: "ls" } });   // creates the DB
-  db().run(`UPDATE skill_scores SET score = 10 WHERE domain = 'architecture'`);
+  // Twelve architecture requests with no prediction, explain-back or verify: low engagement, enough data.
+  for (let i = 0; i < 12; i++) hook("user-prompt", { prompt: "what system design approach fits here" });
   const out = run(["context"]);
   expect(out).toContain("Architecture");
   expect(out).toContain("AT RISK");
