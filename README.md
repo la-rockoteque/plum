@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/plum.png" alt="Professor Plum" width="160"></p>
+
 # Professor Plum
 
 > A metacognitive harness around Claude Code (and eventually Codex) that detects cognitive outsourcing, identifies skill atrophy risks, and introduces coaching interventions to preserve expertise while still benefiting from AI assistance.
