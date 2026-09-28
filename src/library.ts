@@ -7,6 +7,8 @@ export const LIBRARY_DIR = join(PLUM_REPO_DIR, "library");
 export const CATEGORIES = ["principles", "testing", "architecture", "backend", "frontend", "infra", "refactoring", "security"] as const;
 export const DOMAINS    = ["implementation", "debugging", "testing", "architecture", "synthesis"] as const;
 export const LEVELS     = ["foundation", "intermediate", "advanced"] as const;
+export const BACKEND_LANGUAGES = ["python", "typescript", "go", "dotnet", "kotlin"] as const;
+export const LANGUAGES  = [...BACKEND_LANGUAGES, "react", "infra"] as const;
 
 // One concept = concept.json (machine index) + CONCEPT.md (agnostic narrative).
 // Example code lives in shared, runnable per-language projects under library/examples/<lang>/.
@@ -40,8 +42,9 @@ export function loadConcepts(): Concept[] {
 }
 
 export function formatConceptList(concepts: Concept[]): string {
+  const width = Math.max(0, ...concepts.map((c) => c.id.length)) + 2;
   return concepts
-    .map((c) => `${c.id.padEnd(22)} ${c.category.padEnd(13)} ${c.level.padEnd(12)} ${c.summary}`)
+    .map((c) => `${c.id.padEnd(width)} ${c.category.padEnd(13)} ${c.level.padEnd(12)} ${c.summary}`)
     .join("\n");
 }
 
