@@ -2,6 +2,9 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { CONFIG_PATH } from "./env.js";
 
+export type UpdateMode = "prompt" | "silent" | "off";
+const UPDATE_MODES: readonly UpdateMode[] = ["prompt", "silent", "off"];
+
 export interface PlumConfig {
   enabled: boolean;
   mode: "coach" | "gating";
@@ -20,6 +23,10 @@ export interface PlumConfig {
     enabled: boolean;
     formUrl: string;      // https Google Form "viewform" URL
     entryId: string;      // the paragraph field that receives the text, "entry.<digits>"
+  };
+  updates: {
+    mode: UpdateMode;     // "silent" only from a personal/local layer (see resolveConfig)
+    checkIntervalHours: number;
   };
   telemetry: {
     enabled: boolean;     // opt-in, personal/local only (see resolveConfig)
@@ -53,6 +60,10 @@ export const DEFAULTS: PlumConfig = {
     formUrl: "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     entryId: "entry.1018508464"
   },
+  updates: {
+    mode: "prompt",
+    checkIntervalHours: 12
+  },
   telemetry: {
     enabled: false,
     debug: false,
@@ -60,7 +71,8 @@ export const DEFAULTS: PlumConfig = {
   }
 };
 
-type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry">> & {
+type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates">> & {
+  updates?: Partial<PlumConfig["updates"]>;
   thresholds?: Partial<PlumConfig["thresholds"]>;
   domains?: Record<string, boolean>;
   feedback?: Partial<PlumConfig["feedback"]>;
@@ -73,8 +85,9 @@ export interface ConfigLayers {
   local?: Layer;      // <project>/.plum/config.local.json — this machine only, gitignored
 }
 
-// Merge DEFAULTS ← shared ← personal ← local, then apply the consent rule for usage statistics:
-// only a personal or local layer can turn them on, and a shared `false` always wins.
+// Merge DEFAULTS ← shared ← personal ← local, then apply the consent rules:
+// - usage statistics: only a personal or local layer can turn them on; a shared `false` always wins.
+// - updates: only a personal or local layer can choose "silent" (it runs new code unasked); a shared "off" wins.
 export function resolveConfig({ shared = {}, personal = {}, local = {} }: ConfigLayers): PlumConfig {
   const layers = [shared, personal, local];
   const merged = layers.reduce<PlumConfig>((acc, l) => ({
@@ -82,7 +95,8 @@ export function resolveConfig({ shared = {}, personal = {}, local = {} }: Config
     thresholds: { ...acc.thresholds, ...l.thresholds },
     domains:    { ...acc.domains,    ...l.domains },
     feedback:   { ...acc.feedback,   ...l.feedback },
-    telemetry:  acc.telemetry
+    telemetry:  acc.telemetry,
+    updates:    acc.updates
   }), DEFAULTS);
 
   const personalChoice = (key: "enabled" | "debug") =>
@@ -91,8 +105,19 @@ export function resolveConfig({ shared = {}, personal = {}, local = {} }: Config
   const enabled = !vetoed && personalChoice("enabled") === true;
   const days    = local.telemetry?.retentionDays ?? personal.telemetry?.retentionDays ?? shared.telemetry?.retentionDays;
 
+  const mode = (m: unknown): UpdateMode | undefined => UPDATE_MODES.includes(m as UpdateMode) ? m as UpdateMode : undefined;
+  const sharedMode   = mode(shared.updates?.mode);
+  const personalMode = mode(local.updates?.mode) ?? mode(personal.updates?.mode);
+  const updateMode: UpdateMode =
+    sharedMode === "off" ? "off" : personalMode ?? (sharedMode === "silent" ? "prompt" : sharedMode) ?? DEFAULTS.updates.mode;
+  const hours = local.updates?.checkIntervalHours ?? personal.updates?.checkIntervalHours ?? shared.updates?.checkIntervalHours;
+
   return {
     ...merged,
+    updates: {
+      mode: updateMode,
+      checkIntervalHours: typeof hours === "number" && hours >= 0 && hours <= 24 * 30 ? hours : DEFAULTS.updates.checkIntervalHours
+    },
     telemetry: {
       enabled,
       debug: enabled && personalChoice("debug") === true && shared.telemetry?.debug !== false,

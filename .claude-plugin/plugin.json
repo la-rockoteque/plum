@@ -1,8 +1,14 @@
 {
   "name": "plum",
-  "version": "0.2.0",
-  "description": "Professor Plum — detects cognitive outsourcing and coaches you to predict, verify and explain instead of blindly delegating.",
-  "author": { "name": "Rocko Bernier" },
+  "description": "Professor Plum \u2014 detects cognitive outsourcing and coaches you to predict, verify and explain instead of blindly delegating.",
+  "author": {
+    "name": "Rocko Bernier"
+  },
   "license": "UNLICENSED",
-  "keywords": ["coaching", "metacognition", "hooks", "learning"]
+  "keywords": [
+    "coaching",
+    "metacognition",
+    "hooks",
+    "learning"
+  ]
 }

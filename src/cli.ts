@@ -31,6 +31,7 @@ import { weeklyStatus }                               from "./status.js";
 import { loadConcepts, formatConceptList, LIBRARY_DIR } from "./library.js";
 import { record, recordError, runStatsCommand, type UsageData } from "./telemetry.js";
 import { runFeedbackCommand }                         from "./feedback.js";
+import { runUpdateCheck, runUpdateCommand }           from "./update.js";
 import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
 import { join }                                       from "path";
@@ -51,13 +52,15 @@ async function readStdin(): Promise<Record<string, unknown>> {
 
 async function main(): Promise<void> {
   const cfg = getConfig();
-  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "help"].includes(command)) return;
+  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "update", "update-check", "help"].includes(command)) return;
 
   switch (command) {
     case "pre-tool":     return handlePreTool();
     case "post-tool":    return handlePostTool();
     case "user-prompt":  return handleUserPrompt();
     case "session-end":  return handleSessionEnd();
+    case "update-check": return runUpdateCheck();
+    case "update":       { process.exitCode = runUpdateCommand(process.argv.slice(3)); return; }
     case "skill-health": return printSkillHealth();
     case "status":       return printStatus();
     case "predict":      return logPrediction(process.argv.slice(3).join(" "));
@@ -84,6 +87,7 @@ Plum — Professor Plum cognitive atrophy harness
     post-tool     log PostToolUse event + auto-detect verification + update skill scores
     user-prompt   log UserPromptSubmit + classify intent domain
     session-end   finalize session row + print summary
+    update-check  on session start: check the marketplace for a newer Plum (per updates.mode)
 
   User commands:
     skill-health  print skill radar (5 domains, scores 0–100)
@@ -100,6 +104,7 @@ Plum — Professor Plum cognitive atrophy harness
                   send [--open] | clear
 
   Setup:
+    update        check for a newer Plum now (--apply to install it)
     install       show how to install Plum as a Claude Code plugin
     uninstall     remove legacy (pre-plugin) hooks + MCP entry from ~/.claude/settings.json
 `.trim();

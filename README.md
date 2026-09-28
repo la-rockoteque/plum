@@ -83,6 +83,9 @@ otherwise the legacy hooks in `~/.claude/settings.json` fire alongside the plugi
 
 To try it without installing: `claude --plugin-dir /path/to/Plum`.
 
+**Updates:** every push to `main` is a new version. On session start Plum checks for one and asks whether to
+update (or updates silently if you opt in) — see [docs/updates.md](docs/updates.md).
+
 The plugin wires up:
 
 - **Hooks** (`hooks/hooks.json`) — PreToolUse, PostToolUse, UserPromptSubmit, SessionEnd
@@ -122,6 +125,7 @@ bin/plum reset-scores         # reset all scores to 50
 bin/plum wipe --confirm       # delete all local data
 bin/plum feedback --kind feature --message "…"   # print a pre-filled feedback link (--open to open it)
 bin/plum stats status         # opt-in usage statistics: status | summary | verdicts | send | clear
+bin/plum update [--apply]     # check for a newer Plum now (and install it)
 bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
 ```
 
@@ -161,6 +165,10 @@ personal or local file can turn `telemetry.enabled` (and `telemetry.debug`) on; 
     "enabled": true,
     "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     "entryId": "entry.1018508464"      // the form's paragraph field
+  },
+  "updates": {
+    "mode": "prompt",                  // "prompt" | "silent" (personal/local only) | "off"
+    "checkIntervalHours": 12
   },
   "telemetry": {
     "enabled": false,                  // opt-in; personal/local config only

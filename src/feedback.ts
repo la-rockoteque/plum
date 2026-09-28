@@ -71,9 +71,14 @@ export function contextLine(): string {
          `Bun ${Bun.version}, ${platform()}-${arch()}`;
 }
 
+// Plugins without a pinned version are versioned by commit; a checkout reports "dev".
 function plumVersion(): string {
-  try { return JSON.parse(readFileSync(join(PLUM_REPO_DIR, ".claude-plugin", "plugin.json"), "utf-8")).version; }
-  catch { return "unknown"; }
+  try {
+    const pinned = JSON.parse(readFileSync(join(PLUM_REPO_DIR, ".claude-plugin", "plugin.json"), "utf-8")).version;
+    if (pinned) return pinned;
+  } catch { /* fall through */ }
+  const dir = PLUM_REPO_DIR.split("/").pop() ?? "";
+  return /^[0-9a-f]{7,40}$/.test(dir) ? dir.slice(0, 7) : "dev";
 }
 
 // Prints the exact text and the link; opens the browser only when asked. Returns a process exit code.

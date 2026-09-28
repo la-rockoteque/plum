@@ -3,22 +3,60 @@
     "PreToolUse": [
       {
         "matcher": "Agent|Bash|Edit|Write",
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" pre-tool", "timeout": 10 }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" pre-tool",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" post-tool", "timeout": 5, "async": true }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" post-tool",
+            "timeout": 5,
+            "async": true
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" user-prompt", "timeout": 5, "async": true }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" user-prompt",
+            "timeout": 5,
+            "async": true
+          }
+        ]
       }
     ],
     "SessionEnd": [
       {
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" session-end", "timeout": 10 }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" session-end",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/plum\" update-check",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }
