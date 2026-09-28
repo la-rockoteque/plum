@@ -1,0 +1,122 @@
+{
+  "id": "characterization-tests",
+  "title": "Characterization tests",
+  "category": "testing",
+  "domain": "testing",
+  "level": "advanced",
+  "summary": "Untested legacy code gets pinned by tests that describe what it currently does, not what it should, so a safe refactor has something to check against.",
+  "prerequisites": [
+    "red-green-refactor"
+  ],
+  "related": [
+    "testing-through-public-api"
+  ],
+  "signals": [
+    "a hot, frequently-changed file with no tests at all",
+    "\"don't touch this, nobody knows why it works\" comments",
+    "magic numbers and deeply nested conditionals with no names for the rules they encode",
+    "a bug report about behaviour that turns out to be undocumented, not obviously wrong"
+  ],
+  "roles": {
+    "computeRefund()": "the legacy operation under study: no tests, several undocumented rules",
+    "legacy.computeRefund": "the original implementation, left untouched, that the characterization tests pin",
+    "refactored.computeRefund": "the same behaviour with named helpers and constants, proven identical by the same test table",
+    "the characterization test table": "the sensing variable: one row per input the team has now bothered to observe and pin",
+    "the odd behaviours": "the 14/15-day boundary and the >30-day rounding - undocumented, not yet judged as bugs"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Before",
+      "idea": "The legacy computeRefund has nested conditionals, magic numbers, and no tests. One test only pins that it exists and runs for a single sample input - the starting point of legacy work, not a spec."
+    },
+    {
+      "id": "after",
+      "title": "After",
+      "idea": "A table of characterization tests pins the CURRENT output for every case that matters, including the odd ones, each named \"currently ...\" instead of \"should ...\". A refactored implementation with named helpers and constants passes the exact same table, proving the redesign changed nothing observable."
+    }
+  ],
+  "checks": [
+    "Why is the before-stage test named \"nobody knows what computeRefund does\" instead of describing a requirement?",
+    "Why are the after-stage test names \"currently ...\" instead of \"should ...\", and what would change if they said \"should\"?",
+    "The 14-day/15-day boundary and the >30-day rounding look like bugs. What has to happen before either one gets \"fixed\", and how would that step differ from writing a characterization test?",
+    "If someone changed the refactored implementation to give a full refund on day 15 instead of 90%, which specific test fails, and why does the legacy assertion in that same test keep passing?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/characterization_tests/legacy.py"
+        ],
+        "after": [
+          "src/characterization_tests/legacy.py",
+          "src/characterization_tests/refactored.py"
+        ]
+      },
+      "tests": [
+        "tests/test_characterization_tests.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_characterization_tests.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/characterization-tests/legacy.ts"
+        ],
+        "after": [
+          "src/characterization-tests/legacy.ts",
+          "src/characterization-tests/refactored.ts"
+        ]
+      },
+      "tests": [
+        "tests/characterization-tests.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/characterization-tests.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "characterizationtests/legacy/order.go"
+        ],
+        "after": [
+          "characterizationtests/legacy/order.go",
+          "characterizationtests/refactored/order.go"
+        ]
+      },
+      "tests": [
+        "characterizationtests/behaviour/order_test.go"
+      ],
+      "run": "go test ./characterizationtests/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/CharacterizationTests/Legacy/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/CharacterizationTests/Legacy/Order.cs",
+          "RepositoryExample/CharacterizationTests/Refactored/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/CharacterizationTestsTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.CharacterizationTestsTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/characterizationtests/legacy/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/characterizationtests/legacy/Order.kt",
+          "src/main/kotlin/example/characterizationtests/refactored/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/CharacterizationTestsTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.CharacterizationTestsTest'"
+    }
+  }
+}
