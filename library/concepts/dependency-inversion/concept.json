@@ -2,6 +2,7 @@
   "id": "dependency-inversion",
   "title": "Dependency Injection vs Dependency Inversion",
   "category": "principles",
+  "domain": "architecture",
   "level": "foundation",
   "summary": "Injection moves construction to the caller; inversion makes high-level policy own the abstraction that low-level details implement.",
   "prerequisites": [],

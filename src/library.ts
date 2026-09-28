@@ -4,13 +4,18 @@ import { PLUM_REPO_DIR } from "./env.js";
 
 export const LIBRARY_DIR = join(PLUM_REPO_DIR, "library");
 
+export const CATEGORIES = ["principles", "testing", "architecture", "backend", "frontend", "infra", "refactoring", "security"] as const;
+export const DOMAINS    = ["implementation", "debugging", "testing", "architecture", "synthesis"] as const;
+export const LEVELS     = ["foundation", "intermediate", "advanced"] as const;
+
 // One concept = concept.json (machine index) + CONCEPT.md (agnostic narrative).
 // Example code lives in shared, runnable per-language projects under library/examples/<lang>/.
 export interface Concept {
   id: string;
   title: string;
-  category: string;
-  level: "foundation" | "intermediate" | "advanced";
+  category: (typeof CATEGORIES)[number];
+  domain: (typeof DOMAINS)[number];    // the Plum skill domain this concept strengthens
+  level: (typeof LEVELS)[number];
   summary: string;
   prerequisites: string[];
   related: string[];
@@ -38,4 +43,8 @@ export function formatConceptList(concepts: Concept[]): string {
   return concepts
     .map((c) => `${c.id.padEnd(22)} ${c.category.padEnd(13)} ${c.level.padEnd(12)} ${c.summary}`)
     .join("\n");
+}
+
+export function conceptsForDomain(domain: string): Concept[] {
+  return loadConcepts().filter((c) => c.domain === domain);
 }

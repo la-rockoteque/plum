@@ -99,3 +99,17 @@ test("week-wide patterns cool down across sessions, not per session", () => {
   expect(s1).toContain("predict_first");
   expect(s2).not.toContain("debugging");
 });
+
+test("MCP skill context suggests library concepts for at-risk domains", async () => {
+  hook("post-tool", { tool_name: "Bash", tool_input: { command: "ls" } });   // creates the DB
+  db().run(`UPDATE skill_scores SET score = 10 WHERE domain = 'architecture'`);
+
+  const p = Bun.spawn(["bun", CLI, "mcp"], {
+    stdin: "pipe", stdout: "pipe", env: { ...process.env, PLUM_DATA_DIR: dataDir }
+  });
+  p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_skill_context", arguments: {} } }) + "\n");
+  p.stdin.end();
+
+  const reply = JSON.parse((await new Response(p.stdout).text()).trim());
+  expect(reply.result.content[0].text).toContain("/plum:teach cqrs");
+});

@@ -2,6 +2,7 @@
   "id": "cqrs",
   "title": "CQRS — Command Query Responsibility Segregation",
   "category": "architecture",
+  "domain": "architecture",
   "level": "intermediate",
   "summary": "Change state through a behaviour-rich write model and read through a separate, display-shaped read model — even over one shared store.",
   "prerequisites": [

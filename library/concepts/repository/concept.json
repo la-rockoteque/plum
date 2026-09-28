@@ -2,6 +2,7 @@
   "id": "repository",
   "title": "Repository Pattern",
   "category": "backend",
+  "domain": "implementation",
   "level": "foundation",
   "summary": "Give the application a small, domain-shaped contract for loading and saving aggregates so business rules never touch storage APIs.",
   "prerequisites": [],

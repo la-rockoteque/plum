@@ -75,8 +75,7 @@ and repo) and share the link. Otherwise give the local path to open in a browser
 ## 6. Close the loop
 
 Don't end on the link. Ask one explain-back question from the quiz in chat. If the user answers, grade it
-`full` / `partial` / incorrect and call the plum MCP tool `log_explanation` with the concept's domain
-(`architecture` for architecture/principles concepts, `implementation` for backend patterns, `testing` for
-testing concepts) — as in `/plum:explain`. Don't log an incorrect answer.
+`full` / `partial` / incorrect and call the plum MCP tool `log_explanation` with the manifest's `domain` —
+as in `/plum:explain`. Don't log an incorrect answer.
 
 Do not modify the user's repository during a teaching session.

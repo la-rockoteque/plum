@@ -2,7 +2,7 @@
 import { test, expect } from "bun:test";
 import { existsSync } from "fs";
 import { join } from "path";
-import { loadConcepts, LIBRARY_DIR } from "./library.js";
+import { loadConcepts, LIBRARY_DIR, CATEGORIES, DOMAINS, LEVELS } from "./library.js";
 
 const concepts = loadConcepts();
 const ids      = new Set(concepts.map((c) => c.id));
@@ -16,6 +16,9 @@ test("the library ships the imported formation-backend concepts", () => {
 for (const c of concepts) {
   test(`${c.id}: manifest is complete and every referenced file exists`, () => {
     expect(existsSync(join(LIBRARY_DIR, "concepts", c.id, "CONCEPT.md"))).toBe(true);
+    expect(CATEGORIES).toContain(c.category);
+    expect(DOMAINS).toContain(c.domain);
+    expect(LEVELS).toContain(c.level);
     expect(c.summary.length).toBeGreaterThan(20);
     expect(c.stages.length).toBeGreaterThanOrEqual(2);
     expect(c.signals.length).toBeGreaterThan(0);

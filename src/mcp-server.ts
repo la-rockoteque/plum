@@ -18,6 +18,7 @@ import { getSkillSnapshot, getOverallHealthScore, updateSkillScore } from "./ski
 import { detectPatterns }                                             from "./patterns.js";
 import { getDb, latestSessionId }                                     from "./db.js";
 import { weeklyStatus }                                               from "./status.js";
+import { conceptsForDomain }                                          from "./library.js";
 
 // ─── stdio framing ───────────────────────────────────────────────────────────
 
@@ -193,6 +194,8 @@ function toolGetSkillContext(): string {
         synthesis:      "Ask the user to predict the answer before you explain."
       };
       lines.push(`  ${s.label}: ${guidance[s.domain] ?? "require engagement before answering"}`);
+      const concepts = conceptsForDomain(s.domain).map((c) => `/plum:teach ${c.id}`);
+      if (concepts.length > 0) lines.push(`    Offer a lecture: ${concepts.join(", ")}`);
     }
   }
 

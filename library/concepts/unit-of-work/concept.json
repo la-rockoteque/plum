@@ -2,6 +2,7 @@
   "id": "unit-of-work",
   "title": "Unit of Work",
   "category": "backend",
+  "domain": "implementation",
   "level": "intermediate",
   "summary": "Group every read, domain change and write of one business operation into a single commit — or roll all of it back.",
   "prerequisites": [

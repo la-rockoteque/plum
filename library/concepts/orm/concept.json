@@ -2,6 +2,7 @@
   "id": "orm",
   "title": "ORMs — mapping objects to relational storage",
   "category": "backend",
+  "domain": "implementation",
   "level": "intermediate",
   "summary": "An ORM maps rows to objects and generates SQL; it is an adapter detail behind the application's boundary, not a replacement for it.",
   "prerequisites": [
