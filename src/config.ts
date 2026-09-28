@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { CONFIG_PATH } from "./env.js";
 
 export type UpdateMode = "prompt" | "silent" | "off";
@@ -102,7 +102,10 @@ export interface ConfigLayers {
 // Merge DEFAULTS ← shared ← personal ← local, then apply the consent rules:
 // - usage statistics: only a personal or local layer can turn them on; a shared `false` always wins.
 // - updates: only a personal or local layer can choose "silent" (it runs new code unasked); a shared "off" wins.
-export function resolveConfig({ shared = {}, personal = {}, local = {} }: ConfigLayers): PlumConfig {
+export function resolveConfig({ shared: rawShared = {}, personal = {}, local = {} }: ConfigLayers): PlumConfig {
+  // A committed config must not choose where code is fetched from (it would be read, and possibly run).
+  const { repoUrl: _repoUrl, ref: _ref, ...sharedLibrary } = rawShared.library ?? {};
+  const shared: Layer = { ...rawShared, library: sharedLibrary };
   const layers = [shared, personal, local];
   const merged = layers.reduce<PlumConfig>((acc, l) => ({
     ...acc, ...l,
@@ -160,11 +163,34 @@ export function getConfig(): PlumConfig {
   const paths = configPaths();
   // Home dir as project (e.g. running the CLI from ~) would make ~/.plum/config.json count as "shared".
   const sharedPath = paths.shared === paths.personal ? null : paths.shared;
+  const local = readLayer(paths.local);
+  // The local layer is trusted like personal config only while it stays out of git. A committed one is shared.
+  const localIsShared = Object.keys(local).length > 0 && isTrackedByGit(paths.local);
+  const shared = sharedPath ? readLayer(sharedPath) : {};
   return (_cfg = resolveConfig({
-    shared:   sharedPath ? readLayer(sharedPath) : {},
+    shared:   localIsShared ? mergeLayers(shared, local) : shared,
     personal: readLayer(paths.personal),
-    local:    readLayer(paths.local)
+    local:    localIsShared ? {} : local
   }));
+}
+
+// Long-running processes (the MCP server) call this so config changes, like opting out, apply without a restart.
+export function reloadConfig(): void { _cfg = null; }
+
+function mergeLayers(a: Layer, b: Layer): Layer {
+  return {
+    ...a, ...b,
+    thresholds: { ...a.thresholds, ...b.thresholds }, domains: { ...a.domains, ...b.domains },
+    feedback: { ...a.feedback, ...b.feedback }, library: { ...a.library, ...b.library },
+    telemetry: { ...a.telemetry, ...b.telemetry }, updates: { ...a.updates, ...b.updates }
+  };
+}
+
+function isTrackedByGit(path: string): boolean {
+  try {
+    const p = Bun.spawnSync(["git", "-C", dirname(path), "ls-files", "--error-unmatch", "--", path], { stdout: "ignore", stderr: "ignore", timeout: 2_000 });
+    return p.exitCode === 0;
+  } catch { return false; }
 }
 
 function readLayer(path: string): Layer {

@@ -59,7 +59,7 @@ export function buildFormLink(formUrl: string, entryId: string, text: string): F
   const prefilled = url.toString();
   if (prefilled.length <= MAX_URL) return { kind: "link", url: prefilled, host };
   return {
-    kind: "paste", url: formUrl, host,
+    kind: "paste", url: new URL(formUrl).toString(), host,
     reason: `the pre-filled link would be ${prefilled.length} characters (limit ${MAX_URL})`
   };
 }
@@ -106,18 +106,25 @@ export function presentFeedback(text: string, open: boolean): number {
   return 0;
 }
 
+// Never through a shell: on Windows `cmd /c start` would treat the `&` between query parameters as a command separator.
+export function openerCommand(platform: string, url: string): string[] {
+  if (platform === "darwin") return ["open", url];
+  if (platform === "win32")  return ["rundll32", "url.dll,FileProtocolHandler", url];
+  return ["xdg-open", url];
+}
+
 function openInBrowser(url: string): void {
-  const cmd = process.platform === "darwin" ? ["open", url]
-            : process.platform === "win32"  ? ["cmd", "/c", "start", "", url]
-            : ["xdg-open", url];
-  Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore" });
+  Bun.spawn(openerCommand(process.platform, url), { stdout: "ignore", stderr: "ignore" });
 }
 
 // `plum feedback --kind feature|bug|feedback --message <text> [--why] [--contact] [--no-context] [--open]`
 export async function runFeedbackCommand(argv: string[]): Promise<number> {
   const args = parseFlags(argv);
   const kind = (args.kind ?? "feedback") as FeedbackKind;
-  if (!(kind in LABELS)) { console.error("[Plum] --kind must be feature, bug or feedback"); return 1; }
+  if (!Object.hasOwn(LABELS, kind)) { console.error("[Plum] --kind must be feature, bug or feedback"); return 1; }
+  for (const key of ["kind", "message", "why", "contact"]) {
+    if (args[key] === "true") { console.error(`[Plum] --${key} needs a value.`); return 1; }
+  }
 
   const message = args.message ?? (process.stdin.isTTY ? "" : await Bun.stdin.text());
   if (!message.trim()) { console.error("[Plum] Nothing to send: pass --message or pipe the text on stdin."); return 1; }

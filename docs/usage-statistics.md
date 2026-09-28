@@ -12,7 +12,8 @@ Only you can turn them on, in your personal config or this machine's project-loc
 { "telemetry": { "enabled": true } }
 ```
 
-A committed, shared `<project>/.plum/config.json` **cannot** turn them on. It can turn them off for everyone:
+A committed, shared `<project>/.plum/config.json` **cannot** turn them on — and neither can a
+`config.local.json` that has been committed to git (it's treated as shared). It can turn them off for everyone:
 `{ "telemetry": { "enabled": false } }` wins over any personal setting.
 
 `bin/plum stats status` shows whether they're on and where the data lives.

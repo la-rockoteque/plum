@@ -20,6 +20,7 @@ import { getDb, latestSessionId }                                     from "./db
 import { weeklyStatus }                                               from "./status.js";
 import { conceptsForDomain }                                          from "./library.js";
 import { record, recordError }                                        from "./telemetry.js";
+import { reloadConfig }                                               from "./config.js";
 
 // ─── stdio framing ───────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ function handleMessage(msg: any): void {
     case "tools/call": {
       const { name, arguments: args } = params ?? {};
       const started = performance.now();
+      reloadConfig();
       try {
         const result = dispatchTool(name, args ?? {});
         respond(id, { content: [{ type: "text", text: result }] });

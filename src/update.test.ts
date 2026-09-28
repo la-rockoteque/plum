@@ -51,7 +51,7 @@ test("marketplaceUrl reads git and github sources", () => {
 
 // ── decision ─────────────────────────────────────────────────────────────────
 
-const base = { installedSha: OLD, remoteSha: NEW, lastCheck: 0, now: 100 * HOUR, intervalHours: 12, env: {} };
+const base = { installedSha: OLD, remoteSha: NEW, env: {} };
 
 test("decideUpdate: up to date, off, disabled by env, prompt and silent", () => {
   expect(decideUpdate({ ...base, mode: "prompt", remoteSha: OLD })).toBe("none");
@@ -130,9 +130,36 @@ test("update-check prompts when main has new commits, then throttles the network
   const state = JSON.parse(readFileSync(join(data, "update-state.json"), "utf-8"));
   expect(state.remoteSha).toBe(second);
 
-  // Within the interval the cached remote SHA is reused — still prompts, no new ls-remote needed.
+  // Within the interval the cached remote SHA is reused: no network attempt, so lastCheck doesn't move.
   Bun.spawnSync(["rm", "-rf", repo]);
   expect(JSON.parse(check("/cache/plum/plum/x")).systemMessage).toContain(second.slice(0, 7));
+  expect(JSON.parse(readFileSync(join(data, "update-state.json"), "utf-8")).lastCheck).toBe(state.lastCheck);
+});
+
+test("DISABLE_UPDATES stops the check before any network access", () => {
+  register(git(join(home, "work"), "rev-parse", "HEAD"), "/cache/plum/plum/x");
+  pushSecondCommit();
+  writeFileSync(join(data, "config.json"), "{}");
+  const p = Bun.spawnSync(["bun", join(import.meta.dir, "cli.ts"), "update-check"], {
+    env: { ...process.env, PLUM_DATA_DIR: data, CLAUDE_CODE_PLUGIN_CACHE_DIR: plugins, PLUM_PLUGIN_ROOT: "/cache/plum/plum/x", DISABLE_UPDATES: "1", FORCE_AUTOUPDATE_PLUGINS: "" }
+  });
+  expect(p.stdout.toString().trim()).toBe("");
+  expect(existsSync(join(data, "update-state.json"))).toBe(false);
+});
+
+test("an offline check is throttled too, so session start doesn't wait on every run", () => {
+  register(git(join(home, "work"), "rev-parse", "HEAD"), "/cache/plum/plum/x");
+  Bun.spawnSync(["rm", "-rf", repo]);
+  expect(check("/cache/plum/plum/x")).toBe("");
+  const first = JSON.parse(readFileSync(join(data, "update-state.json"), "utf-8")).lastCheck;
+  expect(check("/cache/plum/plum/x")).toBe("");
+  expect(JSON.parse(readFileSync(join(data, "update-state.json"), "utf-8")).lastCheck).toBe(first);
+});
+
+test("a corrupt state file doesn't break the check", () => {
+  register(git(join(home, "work"), "rev-parse", "HEAD"), "/cache/plum/plum/x");
+  writeFileSync(join(data, "update-state.json"), "null");
+  expect(check("/cache/plum/plum/x")).toBe("");
 });
 
 test("update-check does nothing when running from a checkout (not installed from a marketplace)", () => {

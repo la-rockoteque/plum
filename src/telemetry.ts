@@ -91,6 +91,10 @@ export function recordError(tool: string, error: unknown, data: UsageData = {}):
     if (telemetry.enabled && telemetry.debug) {
       const stack = error instanceof Error ? error.stack ?? String(error) : String(error);
       appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${tool}\n${stack}\n\n`);
+      if (statSync(DEBUG_LOG).size > MAX_BYTES) {
+        const text = readFileSync(DEBUG_LOG, "utf-8");
+        writeFileSync(DEBUG_LOG, text.slice(Math.floor(text.length / 2)));   // keep the newest half
+      }
     }
   } catch { /* never break a run */ }
 }
@@ -102,13 +106,18 @@ function readEvents(): UsageEvent[] {
   });
 }
 
+// Timestamp of the first event, reading only up to the first newline. Unknown → Infinity (never forces a rewrite).
 function oldestTs(): number {
   const fd = openSync(USAGE_PATH, "r");
   try {
-    const buf = Buffer.alloc(512);
+    const buf = Buffer.alloc(8192);
     const n = readSync(fd, buf, 0, buf.length, 0);
-    return (JSON.parse(buf.subarray(0, n).toString("utf-8").split("\n")[0]) as UsageEvent).ts;
-  } catch { return 0; } finally { closeSync(fd); }
+    const text = buf.subarray(0, n).toString("utf-8");
+    const nl = text.indexOf("\n");
+    if (nl < 0) return Infinity;
+    const ts = (JSON.parse(text.slice(0, nl)) as UsageEvent).ts;
+    return typeof ts === "number" ? ts : Infinity;
+  } catch { return Infinity; } finally { closeSync(fd); }
 }
 
 // ─── aggregation ─────────────────────────────────────────────────────────────

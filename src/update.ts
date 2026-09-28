@@ -41,9 +41,8 @@ export function findInstall(installed: unknown, root: string): Install | null {
 
 export function marketplaceUrl(known: unknown, name: string): string | null {
   const src = (known as Record<string, { source?: { source?: string; url?: string; repo?: string } }>)?.[name]?.source;
-  if (src?.url) return src.url;
-  if (src?.source === "github" && src.repo) return `https://github.com/${src.repo}.git`;
-  return null;
+  const url = src?.url ?? (src?.source === "github" && src.repo ? `https://github.com/${src.repo}.git` : null);
+  return url && !url.startsWith("-") && !url.includes("::") && !/\s/.test(url) ? url : null;
 }
 
 function samePath(a: string, b: string): boolean {
@@ -55,12 +54,15 @@ function samePath(a: string, b: string): boolean {
 
 export type UpdateAction = "none" | "ask" | "apply";
 
+export function updatesDisabled(mode: UpdateMode, e: Record<string, string | undefined>): boolean {
+  const byEnv = Boolean(e.DISABLE_UPDATES || e.DISABLE_AUTOUPDATER || e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC) && !e.FORCE_AUTOUPDATE_PLUGINS;
+  return mode === "off" || byEnv;
+}
+
 export function decideUpdate(o: {
   mode: UpdateMode; installedSha: string; remoteSha: string | null; env: Record<string, string | undefined>;
 }): UpdateAction {
-  const e = o.env;
-  const disabled = (e.DISABLE_UPDATES || e.DISABLE_AUTOUPDATER || e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC) && !e.FORCE_AUTOUPDATE_PLUGINS;
-  if (o.mode === "off" || disabled || !o.remoteSha) return "none";
+  if (updatesDisabled(o.mode, o.env) || !o.remoteSha) return "none";
   if (o.remoteSha === o.installedSha) return "none";
   return o.mode === "silent" ? "apply" : "ask";
 }
@@ -91,10 +93,18 @@ export function sessionStartOutput(action: UpdateAction, i: { installedSha: stri
 
 // ─── side effects ────────────────────────────────────────────────────────────
 
-interface UpdateState { lastCheck?: number; remoteSha?: string; applied?: { sha: string; at: number; ok: boolean; announced?: boolean } }
+interface UpdateState {
+  lastCheck?: number;
+  remoteSha?: string;
+  pendingSince?: number;   // a background update is running (lock against concurrent sessions)
+  applied?: { sha: string; at: number; ok: boolean; announced?: boolean };
+}
 
 function readState(): UpdateState {
-  try { return JSON.parse(readFileSync(STATE_PATH, "utf-8")); } catch { return {}; }
+  try {
+    const raw = JSON.parse(readFileSync(STATE_PATH, "utf-8"));
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch { return {}; }
 }
 function writeState(s: UpdateState): void {
   mkdirSync(PLUM_DATA_DIR, { recursive: true });
@@ -112,7 +122,7 @@ export function currentInstall(): (Install & { url: string | null }) | null {
 
 // Non-interactive, time-boxed `git ls-remote <url> refs/heads/main`.
 export function lsRemote(url: string, ref = "refs/heads/main"): string | null {
-  const p = Bun.spawnSync(["git", "ls-remote", url, ref], {
+  const p = Bun.spawnSync(["git", "ls-remote", "--end-of-options", url, ref], {
     timeout: LS_REMOTE_TIMEOUT_MS,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=3" }
   });
@@ -121,19 +131,29 @@ export function lsRemote(url: string, ref = "refs/heads/main"): string | null {
   return /^[0-9a-f]{40}$/.test(sha ?? "") ? sha : null;
 }
 
+// Throttled on the last *attempt*, so an offline machine doesn't pay the timeout on every session start.
 function remoteSha(url: string, intervalHours: number, now: number): string | null {
   const state = readState();
-  if (state.remoteSha && state.lastCheck && now - state.lastCheck < intervalHours * HOUR_MS) return state.remoteSha;
+  const last = state.lastCheck ?? 0;
+  if (last <= now && now - last < intervalHours * HOUR_MS) return state.remoteSha ?? null;
   const sha = lsRemote(url);
   writeState({ ...state, lastCheck: now, ...(sha ? { remoteSha: sha } : {}) });
   return sha ?? state.remoteSha ?? null;
 }
 
-// SessionStart hook. Prints at most one JSON object; prints nothing when there's nothing to say.
+// SessionStart hook. Prints at most one JSON object; prints nothing when there's nothing to say. Never throws.
 export function runUpdateCheck(): void {
+  try { updateCheck(); } catch { /* an update check must never disturb session start */ }
+}
+
+const PENDING_TIMEOUT_MS = 15 * 60_000;
+
+function updateCheck(): void {
   const install = currentInstall();
   if (!install?.url) return;                       // running from a checkout, or unknown marketplace
   const { updates } = getConfig();
+  if (updatesDisabled(updates.mode, process.env)) return;   // before any network access
+  const now = Date.now();
   const state = readState();
 
   if (state.applied && !state.applied.announced) {
@@ -142,14 +162,23 @@ export function runUpdateCheck(): void {
       console.log(JSON.stringify({ systemMessage: `Plum was updated to ${short(install.sha)} in the background.` }));
       return;
     }
+    if (!state.applied.ok) {
+      console.log(JSON.stringify({ systemMessage: `A background Plum update failed; run "${pluginRoot()}/bin/plum" update --apply to see why.` }));
+      return;
+    }
   }
+  const pending = state.pendingSince && now - state.pendingSince < PENDING_TIMEOUT_MS;
+  const failedRecently = state.applied && !state.applied.ok && now - state.applied.at < updates.checkIntervalHours * HOUR_MS;
 
-  const remote = updates.mode === "off" ? null : remoteSha(install.url, updates.checkIntervalHours, Date.now());
-  const action = decideUpdate({ mode: updates.mode, installedSha: install.sha, remoteSha: remote, env: process.env });
+  const remote = remoteSha(install.url, updates.checkIntervalHours, now);
+  let action = decideUpdate({ mode: updates.mode, installedSha: install.sha, remoteSha: remote, env: process.env });
+  if (action === "apply" && (pending || failedRecently)) action = pending ? "none" : "ask";
   const out = remote ? sessionStartOutput(action, { installedSha: install.sha, remoteSha: remote, pluginRoot: pluginRoot() }) : null;
   if (!out) return;
   if (action === "apply") {
-    Bun.spawn([join(pluginRoot(), "bin", "plum"), "update", "--apply", "--quiet"], { stdio: ["ignore", "ignore", "ignore"] }).unref();
+    writeState({ ...readState(), pendingSince: now });
+    // Detached so the update survives the hook process exiting.
+    Bun.spawn(["nohup", join(pluginRoot(), "bin", "plum"), "update", "--apply", "--quiet"], { stdio: ["ignore", "ignore", "ignore"], detached: true } as never).unref();
   }
   console.log(JSON.stringify(out));
 }
@@ -173,7 +202,8 @@ export function runUpdateCommand(argv: string[]): number {
   const run = (args: string[]) => Bun.spawnSync(["claude", ...args], { stdout: quiet ? "ignore" : "inherit", stderr: quiet ? "ignore" : "inherit" }).exitCode === 0;
   const ok = run(["plugin", "marketplace", "update", install.marketplace])
           && run(["plugin", "update", install.id, "--scope", install.scope]);
-  writeState({ ...readState(), applied: { sha: remote, at: Date.now(), ok } });
+  const { pendingSince: _done, ...rest } = readState();
+  writeState({ ...rest, applied: { sha: remote, at: Date.now(), ok } });
   say(ok ? "[Plum] Updated. Run /reload-plugins to use it now, or start a new session."
          : "[Plum] Update failed; run `claude plugin update " + install.id + "` to see why.");
   return ok ? 0 : 1;

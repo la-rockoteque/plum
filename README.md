@@ -144,8 +144,10 @@ Three optional JSON files, merged in this order (later wins):
 | `~/.plum/config.json` | personal |
 | `<project>/.plum/config.local.json` | this machine only for this repo — keep it out of git |
 
-Every key is optional; missing keys fall back to the defaults below. **Exception — usage statistics:** only the
-personal or local file can turn `telemetry.enabled` (and `telemetry.debug`) on; a shared `false` always wins.
+Every key is optional; missing keys fall back to the defaults below. **Trust rules:** only the personal or local
+file can turn on `telemetry.enabled`/`telemetry.debug` or choose `updates.mode: "silent"`, and only they can set
+`library.repoUrl`/`library.ref`; a shared `false`/`"off"` always wins. A `config.local.json` that is committed to git
+is treated as shared.
 
 ```jsonc
 {

@@ -41,4 +41,12 @@ fetched.
 { "library": { "cacheMaxMb": 25, "cacheTtlDays": 30, "keepAfterUses": 3, "repoUrl": "git@host:team/plum.git" } }
 ```
 
-`repoUrl` defaults to the marketplace's git URL; set it only for a mirror.
+`repoUrl` defaults to the marketplace's git URL; set it only for a mirror, and only in your personal or local
+config — a committed project config can't redirect where code comes from. URLs must be `https://`, `ssh://`,
+`git@…` or an absolute local path.
+
+## Safety
+
+Manifests are repository content, so Plum treats them as untrusted: concept ids, languages and file paths must be
+plain relative paths, git gets `--end-of-options` before any ref, and only regular files (no symlinks, no
+submodules) inside the example project are copied into the cache.

@@ -116,6 +116,7 @@ test("recording never breaks a run, even when the data dir is unwritable", () =>
   const r = run(["concepts"]);
   expect(r.code).toBe(0);
   expect(r.out).toContain("Concept library");
+  expect(r.out).not.toContain("failed");
 });
 
 test("stats summary, verdicts and send print counts and a form link without opening anything", () => {

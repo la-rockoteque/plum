@@ -5,12 +5,16 @@
  * language, `plum library fetch` pulls exactly those files — a blobless, depth-1, sparse git fetch pinned to the
  * installed commit — into ~/.plum/library-cache/<concept>/<lang>/. A garbage collector keeps the cache small:
  * it drops entries from other plugin versions, entries unused for `cacheTtlDays`, and the least recently used ones
- * above `cacheMaxMb`. Concepts fetched `keepAfterUses` times, or kept by hand, are never collected.
+ * above `cacheMaxMb`. Concepts fetched `keepAfterUses` times, or kept by hand, survive the age and size limits
+ * (a plugin update still refreshes them).
+ *
+ * Manifests are repo content, so every id, language and path from them is validated before it touches the
+ * filesystem or a git command line, and fetched files must be regular files inside the checkout.
  * Running from a repo checkout reads library/examples directly and fetches nothing.
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { dirname, join } from "path";
+import { dirname, isAbsolute, join, relative } from "path";
 import { getConfig } from "./config.js";
 import { PLUM_DATA_DIR, PLUGIN_ROOT } from "./env.js";
 import { loadConcepts } from "./library.js";
@@ -30,6 +34,23 @@ export interface CacheEntry {
   uses: number;
   pinned: boolean;
   cached?: boolean;   // false once evicted; the counters survive so a favourite stays a favourite
+}
+
+// ─── validation (pure) ───────────────────────────────────────────────────────
+
+const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+export const isSafeSegment = (s: string) => SEGMENT.test(s) && s !== "." && s !== "..";
+export const isSafeRelativePath = (p: string) =>
+  p.length > 0 && !isAbsolute(p) && !p.includes("\\") && p.split("/").every((seg) => isSafeSegment(seg));
+export const isSafeRef = (r: string) =>
+  /^[0-9a-f]{40}$/.test(r) || /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,99}$/.test(r) && !r.includes("..");
+// https, ssh or scp-style git@ remotes; an absolute local path for local marketplaces and tests.
+export const isSafeRepoUrl = (u: string) =>
+  (/^(https:\/\/|ssh:\/\/|git@)[^\s]+$/.test(u) || /^\/[^\s]+$/.test(u)) && !u.startsWith("-") && !u.includes("::");
+
+function inside(base: string, p: string): boolean {
+  const r = relative(base, p);
+  return r !== "" && !r.startsWith("..") && !isAbsolute(r);
 }
 
 // ─── eviction policy (pure) ──────────────────────────────────────────────────
@@ -59,13 +80,24 @@ export function planEviction(entries: CacheEntry[], o: {
 type Index = Record<string, CacheEntry>;
 
 function readIndex(): Index {
-  try { return JSON.parse(readFileSync(INDEX_PATH, "utf-8")); } catch { return {}; }
+  try {
+    const raw = JSON.parse(readFileSync(INDEX_PATH, "utf-8"));
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch { return {}; }
 }
 function writeIndex(index: Index): void {
   mkdirSync(CACHE_DIR, { recursive: true });
-  writeFileSync(INDEX_PATH, JSON.stringify(index, null, 2));
+  const tmp = `${INDEX_PATH}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(index, null, 2));
+  renameSync(tmp, INDEX_PATH);                          // atomic replace; concurrent writers can't leave half a file
 }
-const entryDir = (key: string) => join(CACHE_DIR, ...key.split("/"));
+function entryDir(key: string): string {
+  const [id = "", lang = ""] = key.split("/");
+  if (!isSafeSegment(id) || !isSafeSegment(lang)) throw new Error(`Invalid cache key: ${key}`);
+  const dir = join(CACHE_DIR, id, lang);
+  if (!inside(CACHE_DIR, dir)) throw new Error(`Invalid cache key: ${key}`);
+  return dir;
+}
 
 function collect(index: Index, sha: string | undefined, now: number): Index {
   const { library } = getConfig();
@@ -75,8 +107,20 @@ function collect(index: Index, sha: string | undefined, now: number): Index {
   });
   const next = { ...index };
   for (const key of evict) {
-    rmSync(entryDir(key), { recursive: true, force: true });
+    try { rmSync(entryDir(key), { recursive: true, force: true }); } catch { /* invalid key: nothing on disk to remove */ }
     next[key] = { ...next[key], cached: false, bytes: 0 };
+  }
+  // Folders the index doesn't know about (a crash, a lost write) are removed too, so nothing leaks.
+  if (existsSync(CACHE_DIR)) {
+    for (const id of readdirSync(CACHE_DIR)) {
+      if (id.startsWith(".")) continue;                  // in-flight staging folders and the index temp file
+      const idDir = join(CACHE_DIR, id);
+      if (!lstatSync(idDir).isDirectory()) continue;
+      for (const lang of readdirSync(idDir)) {
+        const key = `${id}/${lang}`;
+        if (next[key]?.cached !== true) rmSync(join(idDir, lang), { recursive: true, force: true });
+      }
+    }
   }
   return next;
 }
@@ -96,15 +140,19 @@ function source(): { url: string; sha: string } | null {
   const install = currentInstall();
   const url = library.repoUrl ?? install?.url ?? null;
   if (!url) return null;
-  return { url, sha: install?.sha ?? library.ref };
+  const sha = install?.sha ?? library.ref;
+  if (!isSafeRepoUrl(url)) throw new Error(`Refusing to fetch from ${JSON.stringify(url)}: not an https, ssh or git@ URL.`);
+  if (!isSafeRef(sha)) throw new Error(`Refusing to fetch ref ${JSON.stringify(sha)}.`);
+  return { url, sha };
 }
 
-function git(cwd: string, args: string[]): void {
+function git(cwd: string, args: string[]): string {
   const p = Bun.spawnSync(["git", ...args], {
     cwd, timeout: FETCH_TIMEOUT_MS,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes -o ConnectTimeout=10" }
   });
   if (p.exitCode !== 0) throw new Error(`git ${args[0]} failed: ${p.stderr.toString().trim().split("\n").pop()}`);
+  return p.stdout.toString();
 }
 
 // Blobless, depth-1 fetch of one commit, then a sparse checkout of just the requested files.
@@ -112,17 +160,37 @@ function streamFiles(url: string, sha: string, lang: string, files: string[], de
   const tmp = mkdtempSync(join(tmpdir(), "plum-fetch-"));
   try {
     git(tmp, ["init", "-q"]);
-    git(tmp, ["remote", "add", "origin", url]);
-    git(tmp, ["fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", sha]);
-    git(tmp, ["sparse-checkout", "set", "--no-cone", ...files.map((f) => `/library/examples/${lang}/${f}`)]);
-    git(tmp, ["checkout", "-q", "FETCH_HEAD"]);
+    git(tmp, ["remote", "add", "origin", "--", url]);
+    git(tmp, ["fetch", "-q", "--depth", "1", "--filter=blob:none", "--end-of-options", "origin", sha]);
+    git(tmp, ["sparse-checkout", "set", "--no-cone", "--", ...files.map((f) => `/library/examples/${lang}/${f}`)]);
+    git(tmp, ["-c", "core.symlinks=false", "checkout", "-q", "FETCH_HEAD"]);
+    // Only regular blobs (mode 100644/100755); symlinks (120000) and submodules (160000) are refused.
+    const modes = new Map(git(tmp, ["ls-files", "--stage", "-z"]).split("\0").filter(Boolean)
+      .map((line) => { const [meta, path] = line.split("\t"); return [path, meta.split(" ")[0]] as const; }));
+    const base = realpathSync(join(tmp, "library", "examples", lang));
+    mkdirSync(CACHE_DIR, { recursive: true });
+    const staging = mkdtempSync(join(CACHE_DIR, ".stage-"));    // same filesystem as dest, so rename is atomic
     let bytes = 0;
-    for (const f of files) {
-      const from = join(tmp, "library", "examples", lang, f);
-      if (!existsSync(from)) throw new Error(`${f} is missing at ${sha.slice(0, 7)}`);
-      mkdirSync(dirname(join(dest, f)), { recursive: true });
-      cpSync(from, join(dest, f));
-      bytes += statSync(from).size;
+    try {
+      for (const f of files) {
+        const from = join(base, f);
+        if (!existsSync(from)) throw new Error(`${f} is missing at ${sha.slice(0, 7)}`);
+        const mode = modes.get(`library/examples/${lang}/${f}`);
+        if (mode !== "100644" && mode !== "100755") throw new Error(`${f} is not a regular file (git mode ${mode}); refusing to copy it.`);
+        const st = lstatSync(from);
+        if (!st.isFile() || st.isSymbolicLink() || !inside(base, realpathSync(from))) {
+          throw new Error(`${f} is not a regular file inside the example project; refusing to copy it.`);
+        }
+        mkdirSync(dirname(join(staging, f)), { recursive: true });
+        cpSync(from, join(staging, f));
+        bytes += st.size;
+      }
+      // Move into place in one step, so a concurrent fetch never sees half a folder.
+      rmSync(dest, { recursive: true, force: true });
+      mkdirSync(dirname(dest), { recursive: true });
+      renameSync(staging, dest);
+    } finally {
+      rmSync(staging, { recursive: true, force: true });
     }
     return bytes;
   } finally {
@@ -140,6 +208,9 @@ export function fetchConcept(id: string, lang: string | undefined): { dir: strin
   const example = concept.examples[chosen];
   if (!example) throw new Error(`Concept ${id} has no ${chosen} example (available: ${langs.join(", ")}).`);
   const files = [...new Set([...Object.values(example.stages).flat(), ...example.tests])];
+  if (!isSafeSegment(concept.id) || !isSafeSegment(chosen) || !files.every((f) => typeof f === "string" && isSafeRelativePath(f))) {
+    throw new Error(`Invalid manifest for ${id}: ids, languages and file paths must be plain relative paths.`);
+  }
 
   const local = localExamplesDir();
   if (local) return { dir: join(local, chosen), files };
@@ -155,10 +226,7 @@ export function fetchConcept(id: string, lang: string | undefined): { dir: strin
   const fresh = prior?.cached !== false && prior?.sha === src.sha && files.every((f) => existsSync(join(dir, f)));
 
   let bytes = prior?.bytes ?? 0;
-  if (!fresh) {
-    rmSync(dir, { recursive: true, force: true });
-    bytes = streamFiles(src.url, src.sha, chosen, files, dir);
-  }
+  if (!fresh) bytes = streamFiles(src.url, src.sha, chosen, files, dir);
   index = { ...index, [key]: {
     key, sha: src.sha, bytes, lastUsed: now, uses: (prior?.uses ?? 0) + 1, pinned: prior?.pinned ?? false, cached: true
   } };
@@ -191,11 +259,18 @@ export function runLibraryCommand(argv: string[]): number {
       case "keep":
       case "unkeep": {
         if (!id) { console.error(`Usage: plum library ${sub} <concept> [--lang <language>]`); return 1; }
+        const concept = loadConcepts().find((c) => c.id === id);
+        if (!concept || !isSafeSegment(id)) { console.error(`[Plum] Unknown concept "${id}".`); return 1; }
+        const langs = flags.lang ? [flags.lang] : Object.keys(concept.examples).filter(isSafeSegment);
         const index = readIndex();
-        const keys = Object.keys(index).filter((k) => k.startsWith(`${id}/`) && (!flags.lang || k === `${id}/${flags.lang}`));
-        if (keys.length === 0) { console.error(`[Plum] ${id} isn't in the cache yet; fetch it first.`); return 1; }
-        writeIndex(Object.fromEntries(Object.entries(index).map(([k, e]) => [k, keys.includes(k) ? { ...e, pinned: sub === "keep" } : e])));
-        console.log(`[Plum] ${sub === "keep" ? "Keeping" : "No longer pinning"} ${keys.join(", ")}.`);
+        const pinned = sub === "keep";
+        const next = { ...index };
+        for (const l of langs) {
+          const key = `${id}/${l}`;
+          next[key] = { ...(index[key] ?? { key, sha: "", bytes: 0, lastUsed: Date.now(), uses: 0, cached: false }), pinned };
+        }
+        writeIndex(next);
+        console.log(`[Plum] ${pinned ? "Keeping" : "No longer pinning"} ${id} (${langs.join(", ")}).`);
         return 0;
       }
       case "clear":
