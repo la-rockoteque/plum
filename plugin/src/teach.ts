@@ -1,12 +1,14 @@
 /**
  * Helpers for /plum:teach, so a lecture takes a handful of tool calls instead of dozens:
  *   match  — rank concepts for an id or a plain-language question (one line each, no manifest dump)
- *   survey — compact profile of the consumer repo: stack, layout, candidate files per role
- *   brief  — one bundle: manifest essentials, narrative and the example code in one language
- *   render — build the deck HTML from compact slide JSON (escaping, template and engine handled here)
+ *   survey  — compact profile of the consumer repo: stack, candidate files per role (per concept with --concept)
+ *   outline — numbered declarations of files (classes, functions, data-access imports) instead of full reads
+ *   brief   — manifest essentials + outlines of the example code (--full adds narrative and code)
+ *   render  — build the deck HTML from compact slide JSON; code can be pulled by reference, so Claude never
+ *             copies file bodies into the deck (escaping, template and engine handled here)
  */
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from "fs";
-import { basename, dirname, extname, join, relative } from "path";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync, mkdirSync } from "fs";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "path";
 import { LIBRARY_DIR, loadConcepts, type Concept } from "./library.js";
 import { fetchConcept } from "./library-cache.js";
 import { PLUM_DATA_DIR } from "./env.js";
@@ -85,7 +87,19 @@ function listFiles(root: string): string[] {
   return out;
 }
 
-export function surveyRepo(root: string): string {
+// Which survey categories a concept's roles need, from the words its manifest uses for them.
+function categoriesFor(concept: Concept): Set<string> {
+  const text = `${Object.keys(concept.roles).join(" ")} ${Object.values(concept.roles).join(" ")}`.toLowerCase();
+  const want = new Set<string>();
+  if (/entit|aggregate|value|model|order\b|domain/.test(text)) want.add("entities / models");
+  if (/repositor|port|adapter|store|persist|orm|sql|data/.test(text)) want.add("repositories / data access");
+  if (/use case|service|handler|command|query|application|policy/.test(text)) want.add("services / use cases");
+  if (/controller|endpoint|presentation|request|api|http/.test(text)) want.add("controllers / endpoints");
+  if (/test|double|fake|stub|spy|mock/.test(text)) want.add("tests");
+  return want.size > 0 ? want : new Set(ROLE_PATTERNS.map(([n]) => n));
+}
+
+export function surveyRepo(root: string, concept?: Concept): string {
   const files = listFiles(root);
   const byLang: Record<string, number> = {};
   for (const f of files) { const l = SOURCE_EXT[extname(f)]; if (l) byLang[l] = (byLang[l] ?? 0) + 1; }
@@ -110,9 +124,11 @@ export function surveyRepo(root: string): string {
 
   const source = files.filter((f) => SOURCE_EXT[extname(f)]);
   const isTest = (f: string) => ROLE_PATTERNS[4][1].test(f);
-  const roles = ROLE_PATTERNS.map(([name, re]) => {
+  const wanted = concept ? categoriesFor(concept) : null;
+  const perRole = concept ? 3 : 6;
+  const roles = ROLE_PATTERNS.filter(([name]) => !wanted || wanted.has(name)).map(([name, re]) => {
     const hits = source.filter((f) => re.test(f) && (name === "tests" || !isTest(f)));
-    return `- ${name} (${hits.length}): ${hits.slice(0, 6).join(", ") || "none found"}`;
+    return `- ${name} (${hits.length}): ${hits.slice(0, perRole).join(", ") || "none found"}`;
   });
 
   const nouns: Record<string, number> = {};
@@ -121,6 +137,15 @@ export function surveyRepo(root: string): string {
     if (n.length > 2 && !["index", "base", "types", "utils", "common"].includes(n)) nouns[n] = (nouns[n] ?? 0) + 1;
   }
   const domain = Object.entries(nouns).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([n]) => n);
+
+  if (concept) {
+    return [
+      `# ${basename(root)} for ${concept.id}: ${langs.slice(0, 2).map(([l]) => l).join("/") || "?"} · ${[...frameworks].join(", ") || "no framework detected"} · ${files.length} files`,
+      `Domain nouns: ${domain.slice(0, 8).join(", ") || "none"}`,
+      ...roles,
+      `Next: \`plum teach outline <file> …\` on the 1–3 files you bind to.`
+    ].join("\n");
+  }
 
   return [
     `# Repo survey: ${basename(root)} (${files.length} tracked files)`,
@@ -137,11 +162,85 @@ export function surveyRepo(root: string): string {
   ].join("\n");
 }
 
+// ─── outline ─────────────────────────────────────────────────────────────────
+
+const DECL = [
+  /^\s*(export\s+)?(default\s+)?(abstract\s+|sealed\s+|data\s+|open\s+|partial\s+|static\s+)*(public\s+|private\s+|protected\s+|internal\s+)?(abstract\s+|sealed\s+|data\s+|static\s+)*(class|interface|enum|record|struct|object|trait|module|namespace)\s+\w/,
+  /^\s*(export\s+)?type\s+\w+(<[^>]*>)?\s*=/,
+  /^\s*(export\s+)?(async\s+)?function\b/,
+  /^\s*(async\s+)?def\s+\w+/,
+  /^func\s/,
+  /^\s*((public|private|protected|internal|override|open|suspend|static|async|abstract|virtual)\s+)*fun\s+/,
+  // C#/Java/TS methods and constructors: modifiers, a name, a parameter list, then a body or arrow
+  /^\s+((public|private|protected|internal|static|async|override|virtual|abstract|readonly)\s+)*[\w<>\[\],.?]+\s+\w+\s*\([^;]*\)\s*(\{|=>)?\s*$/,
+  /^\s+((public|private|protected|static|async|readonly)\s+)*(constructor|\w+)\s*\([^;]*\)\s*(:\s*[^{=;]+)?\s*\{\s*$/,
+  /^\s*export\s+(const|let)\s+\w+\s*=\s*(async\s*)?\(/
+];
+const DATA_IMPORT = /^\s*(import|using|from|require)\b.*\b(prisma|typeorm|sequelize|mongoose|drizzle|knex|pg\b|mysql|sqlite|sqlalchemy|django\.db|gorm|database\/sql|sqlx|EntityFrameworkCore|Dapper|Data\.Sqlite|jdbc|exposed|hibernate|jpa|repository|Repository)/i;
+const OUTLINE_MAX = 30;
+const CONTROL = /^\s*(if|else|for|foreach|while|switch|catch|return|using\s*\(|lock|when|try|do)\b/;
+
+export function outlineFile(abs: string, base: string): string {
+  const text = readFileSync(abs, "utf-8");
+  const lines = text.split("\n");
+  const picked: string[] = [];
+  lines.forEach((line, i) => {
+    if (picked.length >= OUTLINE_MAX) return;
+    if (CONTROL.test(line)) return;
+    if (DATA_IMPORT.test(line) || DECL.some((re) => re.test(line))) picked.push(`${i + 1}: ${line.trimEnd().slice(0, 140)}`);
+  });
+  const shown = relative(base, abs) || basename(abs);
+  return [`## ${shown} (${lines.length} lines)`, ...(picked.length ? picked : ["(no declarations found)"])].join("\n");
+}
+
+function insideProject(projectDir: string, rel: string): string {
+  if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).includes("..")) throw new Error(`Path must be relative to the project: ${rel}`);
+  const abs = resolve(projectDir, rel);
+  const real = realpathSync(abs);
+  const r = relative(realpathSync(projectDir), real);
+  if (r.startsWith("..") || isAbsolute(r)) throw new Error(`Path escapes the project: ${rel}`);
+  return real;
+}
+
+// ─── code references (resolved by the renderer) ──────────────────────────────
+
+const LANG_OF_EXT: Record<string, string> = { ".ts": "ts", ".tsx": "tsx", ".js": "js", ".py": "python", ".go": "go",
+  ".cs": "csharp", ".kt": "kotlin", ".java": "java", ".rb": "ruby", ".php": "php", ".rs": "rust", ".sql": "sql" };
+
+function sliceLines(text: string, lines?: string): { text: string; range: string } {
+  const all = text.replace(/\n$/, "").split("\n");
+  if (!lines) return { text: all.join("\n"), range: `1–${all.length}` };
+  const m = /^(\d+)(?:-(\d+))?$/.exec(lines.trim());
+  if (!m) throw new Error(`lines must look like "12-30": ${lines}`);
+  const from = Math.max(1, Number(m[1])), to = Math.min(all.length, Number(m[2] ?? m[1]));
+  return { text: all.slice(from - 1, to).join("\n"), range: `${from}–${to}` };
+}
+
+export function resolveCodeRef(block: CodeBlock, projectDir: string): CodeBlock {
+  if (!block.ref) return block;
+  const [kind, ...restParts] = block.ref.split(":");
+  const target = restParts.join(":");
+  if (kind === "repo") {
+    const abs = insideProject(projectDir, target);
+    const { text, range } = sliceLines(readFileSync(abs, "utf-8"), block.lines);
+    return { lang: block.lang ?? LANG_OF_EXT[extname(abs)], text, src: block.src ?? `${target}:${range}` };
+  }
+  if (kind === "example") {
+    const [id, lang, ...fileParts] = target.split("/");
+    const file = fileParts.join("/");
+    const { dir, files } = fetchConcept(id, lang);
+    if (!files.includes(file)) throw new Error(`${file} is not part of ${id}'s ${lang} example (files: ${files.join(", ")})`);
+    const { text, range } = sliceLines(readFileSync(join(dir, file), "utf-8"), block.lines);
+    return { lang: block.lang ?? LANG_OF_EXT[extname(file)], text, src: block.src ?? `Plum library · ${lang}/${file}:${range}` };
+  }
+  throw new Error(`Unknown code ref "${block.ref}" (use repo:<path> or example:<concept>/<lang>/<file>)`);
+}
+
 // ─── brief ───────────────────────────────────────────────────────────────────
 
 const FENCE: Record<string, string> = { python: "python", typescript: "ts", go: "go", dotnet: "csharp", kotlin: "kotlin", react: "tsx", infra: "" };
 
-export function conceptBrief(id: string, lang: string | undefined, withNarrative = true): string {
+export function conceptBrief(id: string, lang: string | undefined, full = false): string {
   const c = loadConcepts().find((x) => x.id === id);
   if (!c) throw new Error(`Unknown concept "${id}". Try \`plum teach match "<question>"\`.`);
   const chosen = lang && c.examples[lang] ? lang : Object.keys(c.examples)[0];
@@ -156,16 +255,21 @@ export function conceptBrief(id: string, lang: string | undefined, withNarrative
     "", "## Checks", ...c.checks.map((q, i) => `${i + 1}. ${q}`),
     "", `## Run (${chosen}, from Plum's library/examples/${chosen}): ${c.examples[chosen].run}`
   ];
-  if (withNarrative) {
+  if (full) {
     const md = join(LIBRARY_DIR, "concepts", c.id, "CONCEPT.md");
     if (existsSync(md)) lines.push("", "## Narrative", readFileSync(md, "utf-8").trim());
   }
   try {
     const { dir, files } = fetchConcept(c.id, chosen);
     const stageOf = (f: string) => Object.entries(c.examples[chosen].stages).find(([, fs]) => fs.includes(f))?.[0] ?? "test";
-    lines.push("", `## Code (${chosen})`);
-    for (const f of files) {
-      lines.push("", `### ${f} [${stageOf(f)}]`, "```" + (FENCE[chosen] ?? ""), readFileSync(join(dir, f), "utf-8").trimEnd(), "```");
+    if (full) {
+      lines.push("", `## Code (${chosen})`);
+      for (const f of files) {
+        lines.push("", `### ${f} [${stageOf(f)}]`, "```" + (FENCE[chosen] ?? ""), readFileSync(join(dir, f), "utf-8").trimEnd(), "```");
+      }
+    } else {
+      lines.push("", `## Outlines (${chosen}) — put code on slides with {"ref": "example:${c.id}/${chosen}/<file>", "lines": "a-b"}`);
+      for (const f of files) lines.push("", outlineFile(join(dir, f), dir).replace(/^## /, `### [${stageOf(f)}] `));
     }
   } catch (e) {
     lines.push("", `## Code unavailable: ${(e as Error).message}`, "Teach from the narrative and say so on the title slide.");
@@ -178,7 +282,8 @@ export function conceptBrief(id: string, lang: string | undefined, withNarrative
 export const SLIDE_KINDS = ["title", "question", "problem", "idea", "diagram", "binding", "before", "after", "compare",
   "tradeoff", "quiz", "exercise", "recap"] as const;
 
-export interface CodeBlock { lang?: string; text: string; src?: string }
+// Either literal text, or a ref the renderer resolves: "repo:<path>" or "example:<concept>/<lang>/<file>".
+export interface CodeBlock { lang?: string; text?: string; ref?: string; lines?: string; src?: string }
 export interface Slide {
   kind: (typeof SLIDE_KINDS)[number];
   title: string;
@@ -200,12 +305,15 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 // Inline text: HTML-escaped, then `code` and **bold** only.
 const inline = (s: string) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
-function codeHtml(c: CodeBlock): string {
+let refRoot = process.cwd();
+
+function codeHtml(block: CodeBlock): string {
+  const c = resolveCodeRef(block, refRoot);
   const cls = c.lang ? ` class="language-${esc(c.lang)}"` : "";
-  return `<pre><code${cls}>${esc(c.text)}</code></pre>` + (c.src ? `\n<p class="src">${esc(c.src)}</p>` : "");
+  return `<pre><code${cls}>${esc(c.text ?? "")}</code></pre>` + (c.src ? `\n<p class="src">${esc(c.src)}</p>` : "");
 }
 
-function slideHtml(s: Slide): string {
+function slideHtml(s: Slide, index: number): string {
   if (!SLIDE_KINDS.includes(s.kind)) throw new Error(`Unknown slide kind "${s.kind}" (use: ${SLIDE_KINDS.join(", ")})`);
   const out: string[] = [];
   if (s.eyebrow) out.push(`<p class="eyebrow">${inline(s.eyebrow)}</p>`);
@@ -238,15 +346,16 @@ function slideHtml(s: Slide): string {
       `<li><p>${inline(q.q)}</p><details class="answer"><summary>Reveal</summary><p>${inline(q.a)}</p></details></li>`).join("")}</ol>`);
   }
   if (s.notes) out.push(`<aside class="notes">${inline(s.notes)}</aside>`);
-  return `<section class="slide" data-kind="${s.kind}">\n  ${out.join("\n  ")}\n</section>`;
+  return `<section class="slide" id="s${index + 1}" data-kind="${s.kind}">\n  ${out.join("\n  ")}\n</section>`;
 }
 
-export function renderDeck(title: string, slides: Slide[]): string {
+export function renderDeck(title: string, slides: Slide[], projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd()): string {
+  refRoot = projectDir;
   const template = readFileSync(join(LIBRARY_DIR, "deck", "template.html"), "utf-8");
   const start = template.indexOf("<!-- SLIDES:START -->");
   const end = template.indexOf("<!-- SLIDES:END -->");
   if (start < 0 || end < 0) throw new Error("deck template is missing its SLIDES markers");
-  const body = slides.map(slideHtml).join("\n\n");
+  const body = slides.map((slide, i) => slideHtml(slide, i)).join("\n\n");
   return (template.slice(0, start) + `<!-- SLIDES:START -->\n\n${body}\n\n` + template.slice(end))
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
 }
@@ -265,12 +374,21 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         for (const m of matches) console.log(`${m.id} — ${m.title}: ${m.summary}`);
         return 0;
       }
-      case "survey":
-        console.log(surveyRepo(positional[0] ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd()));
+      case "survey": {
+        const concept = flags.concept ? loadConcepts().find((c) => c.id === flags.concept) : undefined;
+        if (flags.concept && !concept) throw new Error(`Unknown concept "${flags.concept}"`);
+        console.log(surveyRepo(positional[0] ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), concept));
         return 0;
+      }
+      case "outline": {
+        const root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+        if (positional.length === 0) { console.error("Usage: plum teach outline <file> [file …] (paths relative to the project)"); return 1; }
+        console.log(positional.map((f) => outlineFile(insideProject(root, f), root)).join("\n\n"));
+        return 0;
+      }
       case "brief":
-        if (!positional[0]) { console.error("Usage: plum teach brief <concept> [--lang L] [--no-narrative]"); return 1; }
-        console.log(conceptBrief(positional[0], flags.lang, flags["no-narrative"] !== "true"));
+        if (!positional[0]) { console.error("Usage: plum teach brief <concept> [--lang L] [--full]"); return 1; }
+        console.log(conceptBrief(positional[0], flags.lang, flags.full === "true"));
         return 0;
       case "render": {
         const raw = flags.in ? readFileSync(flags.in, "utf-8") : await Bun.stdin.text();
@@ -284,7 +402,7 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         return 0;
       }
       default:
-        console.error("Usage: plum teach match <query> | survey [dir] | brief <concept> [--lang L] | render --title T [--out F] [--in slides.json]");
+        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
         return 1;
     }
   } catch (e) {

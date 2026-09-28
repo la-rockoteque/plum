@@ -79,12 +79,16 @@
   .rail button:focus-visible, .ctl:focus-visible { outline: 2px solid var(--plum); outline-offset: 2px; }
 
   /* ── slides ──────────────────────────────── */
-  #deck { overflow: auto; padding-block: 28px; }
-  .slide { max-width: 1180px; margin-inline: auto; display: grid; gap: 18px; align-content: start; }
-  .slide:not(.active) { display: none; }
+  /* Slides stack and snap; navigation works by plain scrolling and #sN anchors even without script. */
+  #deck { overflow-y: auto; scroll-snap-type: y mandatory; scroll-padding-top: 0; }
+  .slide {
+    max-width: 1180px; margin-inline: auto; display: grid; gap: 18px; align-content: start;
+    min-height: calc(100vh - 118px); min-height: calc(100dvh - 118px); /* viewport minus top bar and controls */
+    padding-block: 28px 40px; scroll-snap-align: start; scroll-snap-stop: always;
+    border-bottom: 1px solid var(--rule);
+  }
   @media (prefers-reduced-motion: no-preference) {
-    .slide.active { animation: enter .25s ease-out; }
-    @keyframes enter { from { transform: translateY(6px); opacity: .6; } to { transform: none; opacity: 1; } }
+    #deck { scroll-behavior: smooth; }
   }
 
   .eyebrow {
@@ -237,54 +241,70 @@
   <span class="count" id="count" aria-live="polite">1 / 1</span>
   <button class="ctl" id="next" type="button" aria-label="Next slide">→</button>
   <button class="ctl" id="notes" type="button" aria-pressed="false">Notes</button>
-  <span class="keys">← → or space to move · N for notes</span>
+  <span class="keys">Scroll, ← → or space to move · N for notes</span>
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-  const slides = [...document.querySelectorAll(".slide")];
-  const rail   = document.getElementById("rail");
-  const count  = document.getElementById("count");
-  const deck   = document.getElementById("deck");
-  let current  = 0;
+  // Progressive enhancement only: the deck is fully usable by scrolling if this script never runs.
+  (function () {
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const rail   = document.getElementById("rail");
+    const count  = document.getElementById("count");
+    let current  = 0;
 
-  slides.forEach((s, i) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.dataset.kind = s.dataset.kind || "";
-    b.setAttribute("aria-label", `Slide ${i + 1}: ${s.querySelector("h1, h2")?.textContent.trim() ?? ""}`);
-    b.addEventListener("click", () => go(i));
-    rail.appendChild(b);
-  });
+    slides.forEach((s, i) => {
+      if (!s.id) s.id = "s" + (i + 1);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.kind = s.dataset.kind || "";
+      const h = s.querySelector("h1, h2");
+      b.setAttribute("aria-label", "Slide " + (i + 1) + (h ? ": " + h.textContent.trim() : ""));
+      b.addEventListener("click", () => go(i));
+      rail.appendChild(b);
+    });
 
-  function go(i) {
-    current = Math.max(0, Math.min(slides.length - 1, i));
-    slides.forEach((s, j) => s.classList.toggle("active", j === current));
-    [...rail.children].forEach((b, j) => b.setAttribute("aria-current", String(j === current)));
-    count.textContent = `${current + 1} / ${slides.length}`;
-    deck.scrollTop = 0;
-    try { history.replaceState(null, "", `#s${current + 1}`); } catch {}
-  }
+    function mark(i) {
+      current = i;
+      Array.from(rail.children).forEach((b, j) => b.setAttribute("aria-current", String(j === i)));
+      count.textContent = (i + 1) + " / " + slides.length;
+    }
 
-  document.getElementById("prev").addEventListener("click", () => go(current - 1));
-  document.getElementById("next").addEventListener("click", () => go(current + 1));
-  const notesBtn = document.getElementById("notes");
-  function toggleNotes() {
-    const on = document.body.classList.toggle("show-notes");
-    notesBtn.setAttribute("aria-pressed", String(on));
-  }
-  notesBtn.addEventListener("click", toggleNotes);
+    function go(i, instant) {
+      const n = Math.max(0, Math.min(slides.length - 1, i));
+      slides[n].scrollIntoView({ block: "start", behavior: instant ? "instant" : "auto" });
+      mark(n);
+    }
 
-  document.addEventListener("keydown", (e) => {
-    if (e.target.closest("input, textarea, summary")) return;
-    if (e.key === "ArrowRight" || e.key === "PageDown" || (e.key === " " && !e.shiftKey)) { e.preventDefault(); go(current + 1); }
-    else if (e.key === "ArrowLeft" || e.key === "PageUp" || (e.key === " " && e.shiftKey)) { e.preventDefault(); go(current - 1); }
-    else if (e.key === "Home") go(0);
-    else if (e.key === "End") go(slides.length - 1);
-    else if (e.key.toLowerCase() === "n") toggleNotes();
-  });
+    // Track the slide in view, whether the deck or the page is the scrolling element.
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) if (e.isIntersecting) mark(slides.indexOf(e.target));
+      }, { threshold: 0.55 });
+      slides.forEach((s) => io.observe(s));
+    }
 
-  const fromHash = /^#s(\d+)$/.exec(location.hash);
-  go(fromHash ? Number(fromHash[1]) - 1 : 0);
-  if (window.hljs) document.querySelectorAll("pre code").forEach((el) => hljs.highlightElement(el));
+    document.getElementById("prev").addEventListener("click", () => go(current - 1));
+    document.getElementById("next").addEventListener("click", () => go(current + 1));
+    const notesBtn = document.getElementById("notes");
+    function toggleNotes() {
+      const on = document.body.classList.toggle("show-notes");
+      notesBtn.setAttribute("aria-pressed", String(on));
+    }
+    notesBtn.addEventListener("click", toggleNotes);
+
+    document.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (t && t.nodeType === 1 && t.closest("input, textarea, select, summary, [contenteditable]")) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown" || (e.key === " " && !e.shiftKey)) { e.preventDefault(); go(current + 1); }
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp" || (e.key === " " && e.shiftKey)) { e.preventDefault(); go(current - 1); }
+      else if (e.key === "Home") { e.preventDefault(); go(0); }
+      else if (e.key === "End") { e.preventDefault(); go(slides.length - 1); }
+      else if (e.key === "n" || e.key === "N") toggleNotes();
+    });
+
+    const fromHash = /^#s(\d+)$/.exec(location.hash || "");
+    if (fromHash) go(Number(fromHash[1]) - 1, true); else mark(0);
+    try { if (window.hljs) document.querySelectorAll("pre code").forEach((el) => window.hljs.highlightElement(el)); } catch (e) {}
+  })();
 </script>

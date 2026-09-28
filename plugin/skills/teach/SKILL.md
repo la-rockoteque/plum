@@ -5,8 +5,9 @@ argument-hint: "[concept id or question]"
 ---
 
 Turn one concept from Plum's library into a **lecture deck** that explains it through the library's canonical
-example and re-binds every role to *this* repository. Use the `plum teach` helpers below — they replace most
-manual reading, searching and HTML writing. Keep to roughly **five tool calls** before writing the deck.
+example and re-binds every role to *this* repository. Use the `plum teach` helpers below — they replace manual
+reading, searching and HTML writing. Budget: **five tool calls** before writing the deck, and **never Read whole
+files** — use outlines and let the renderer pull code by reference.
 
 ```bash
 P="${CLAUDE_PLUGIN_ROOT}/bin/plum"
@@ -24,13 +25,14 @@ concepts exist and offer the closest; don't pretend the library covers it.
 ## 2. Survey the repo — one call
 
 ```bash
-"$P" teach survey
+"$P" teach survey --concept <concept-id>
+"$P" teach outline <file> [<file> …]        # the 1–3 candidates you'll bind to
 ```
 
-Prints languages, frameworks/ORMs, manifests, domain nouns, layout, and candidate files per role (entities,
-repositories, services, controllers, tests) — from file names only. Then open **at most three** of those files
-(Read with a line range) to confirm bindings and take 1–3 real excerpts (≤ 20 lines each) with exact `path:line`
-ranges. Never invent repo code; anything you write in their domain is labelled *illustrative*.
+`survey` prints the stack, domain nouns and up to three candidate files for each role category the concept needs.
+`outline` prints each file's numbered declarations (classes, methods, data-access imports) — enough to bind roles
+and choose line ranges for excerpts. Only if an outline can't answer a binding question, Read a narrow line range.
+Never invent repo code; anything you write in their domain is labelled *illustrative*.
 
 ## 3. Load the concept — one call
 
@@ -39,9 +41,9 @@ ranges. Never invent repo code; anything you write in their domain is labelled *
 ```
 
 `<lang>` is the repo's closest example language: `typescript` (JS/TS), `python`, `go`, `dotnet` (C#), `kotlin`
-(Kotlin/Java). Prints the manifest essentials (roles, signals, stages, checks, run command), the narrative, and
-every stage and test file in that language — fetched on demand. Add `--no-narrative` if you already know the
-concept. If the code can't be fetched, the brief says so: teach from the narrative and say so on the title slide.
+(Kotlin/Java). Prints the manifest essentials (roles, signals, stages, checks, run command) and outlines of every
+stage and test file in that language — fetched on demand. Use `--full` only if you genuinely need the narrative or
+complete code. If the code can't be fetched, the brief says so: teach from the manifest and say so on the title slide.
 
 ## 4. Write the deck as JSON — one call
 
@@ -52,7 +54,9 @@ Write a JSON array of slides to a scratch file, then render it:
 ```
 
 It prints the output path (`~/.plum/sessions/<title>.html`). The renderer escapes everything and produces the
-HTML — never write HTML yourself.
+HTML — never write HTML yourself. For any existing code (theirs or the library's), use a `ref` with a line range
+from an outline: the renderer reads, slices, escapes and attributes it (`src` is filled in for you). Write `text`
+only for the illustrative rewrite in their domain.
 
 Slide fields (all optional except `kind` and `title`; inline text supports `` `code` `` and `**bold**`):
 
@@ -61,7 +65,8 @@ Slide fields (all optional except `kind` and `title`; inline text supports `` `c
   "kind": "title | question | problem | idea | diagram | binding | before | after | compare | tradeoff | quiz | exercise | recap",
   "title": "…", "eyebrow": "…", "lede": "…", "meta": "…",
   "text": ["paragraph", "…"], "bullets": ["…"],
-  "code": { "lang": "ts", "text": "raw code, unescaped", "src": "path/to/file.ts:12–30" },
+  "code": { "ref": "repo:<path>" | "example:<concept>/<lang>/<file>", "lines": "12-30" },
+  "code": { "lang": "ts", "text": "only for code you write yourself (the illustrative rewrite)" },
   "cols": [ { "tag": "before | after | yours", "label": "…", "code": { … }, "bullets": ["…"] } ],
   "table": { "headers": ["Role", "Meaning", "Yours"], "rows": [["…", "…", "…"]], "missing": [[row, col]] },
   "diagram": "plain-text diagram", "mermaid": "graph LR; A-->B",

@@ -75,7 +75,7 @@ test("render fills the template, escapes code and text, and keeps the slide engi
   const html = renderDeck("Unit of Work Lecture", slides);
   expect(html).toContain("<title>Unit of Work Lecture</title>");
   expect(html).not.toContain("The Repository Pattern");                // the template's sample slides are replaced
-  expect(html.match(/<section class="slide"/g)?.length).toBe(slides.length);
+  expect(html.match(/<section class="slide" id="s\d+"/g)?.length).toBe(slides.length);
   expect(html).toContain("if (a &lt; b &amp;&amp; c &gt; d)");
   expect(html).toContain("const x = &lt;T&gt;y;");
   expect(html).toContain('class="language-ts"');
@@ -106,8 +106,8 @@ test("`plum teach render` writes the deck from JSON on stdin", () => {
   expect(readFileSync(out, "utf-8")).toContain("<title>Unit of Work Lecture</title>");
 });
 
-test("`plum teach brief` bundles manifest, narrative and code for one language", () => {
-  const p = Bun.spawnSync(["bun", CLI, "teach", "brief", "unit-of-work", "--lang", "go"]);
+test("`plum teach brief --full` bundles manifest, narrative and code for one language", () => {
+  const p = Bun.spawnSync(["bun", CLI, "teach", "brief", "unit-of-work", "--lang", "go", "--full"]);
   const out = p.stdout.toString();
   expect(p.exitCode).toBe(0);
   expect(out).toContain("# Unit of Work (unit-of-work)");
@@ -116,4 +116,70 @@ test("`plum teach brief` bundles manifest, narrative and code for one language",
   expect(out).toContain("## Narrative");
   expect(out).toContain("uow/batch.go");
   expect(out).toContain("```go");
+});
+
+// ── token-lean exploration ───────────────────────────────────────────────────
+
+import { outlineFile, resolveCodeRef } from "./teach.js";
+
+test("outline shows numbered declarations and data-access imports, not bodies", () => {
+  const dir = mkdtempSync(join(tmpdir(), "plum-outline-"));
+  const f = join(dir, "order.service.ts");
+  writeFileSync(f, [
+    'import { PrismaService } from "../prisma/prisma.service";',
+    'import { format } from "date-fns";',
+    "",
+    "export class OrderService {",
+    "  constructor(private readonly prisma: PrismaService) {}",
+    "",
+    "  async cancel(id: number): Promise<void> {",
+    "    const row = await this.prisma.order.findUnique({ where: { id } });",
+    "    if (row.status === 'shipped') throw new Error('nope');",
+    "  }",
+    "}",
+    "",
+    "export function helper(x: number) { return x * 2; }"
+  ].join("\n"));
+  const out = outlineFile(f, dir);
+  expect(out).toContain("order.service.ts (13 lines)");
+  expect(out).toContain("1: import { PrismaService }");
+  expect(out).not.toContain("date-fns");
+  expect(out).toContain("4: export class OrderService {");
+  expect(out).toContain("7:   async cancel(id: number): Promise<void> {");
+  expect(out).toContain("13: export function helper");
+  expect(out).not.toContain("findUnique");
+});
+
+test("survey --concept keeps only the role categories that concept binds", () => {
+  const repo = mkdtempSync(join(tmpdir(), "plum-survey-c-"));
+  for (const p of ["src/orders/order.repository.ts", "src/orders/order.service.ts", "src/orders/orders.controller.ts", "src/orders/order.entity.ts"]) {
+    mkdirSync(join(repo, p, ".."), { recursive: true });
+    writeFileSync(join(repo, p), "x");
+  }
+  const s = surveyRepo(repo, loadConcepts().find((c) => c.id === "repository"));
+  expect(s).toContain("order.repository.ts");
+  expect(s).not.toContain("## Layout");
+  expect(s.split("\n").length).toBeLessThan(15);
+});
+
+test("code refs pull repo and example lines into slides, and can't escape the project", () => {
+  const repo = mkdtempSync(join(tmpdir(), "plum-ref-"));
+  mkdirSync(join(repo, "src"));
+  writeFileSync(join(repo, "src", "a.ts"), ["one", "two", "three <T>", "four"].join("\n"));
+  expect(resolveCodeRef({ ref: "repo:src/a.ts", lines: "2-3" }, repo)).toEqual({ lang: "ts", text: "two\nthree <T>", src: "src/a.ts:2–3" });
+  expect(() => resolveCodeRef({ ref: "repo:../../etc/passwd" }, repo)).toThrow();
+  expect(() => resolveCodeRef({ ref: "repo:/etc/passwd" }, repo)).toThrow();
+  const ex = resolveCodeRef({ ref: "example:unit-of-work/go/uow/batch.go", lines: "1-3" }, repo);
+  expect(ex.src).toBe("Plum library · go/uow/batch.go:1–3");
+  expect(ex.text?.split("\n").length).toBe(3);
+});
+
+test("brief defaults to essentials plus outlines; --full adds narrative and code", () => {
+  const lean = Bun.spawnSync(["bun", CLI, "teach", "brief", "unit-of-work", "--lang", "go"]).stdout.toString();
+  const full = Bun.spawnSync(["bun", CLI, "teach", "brief", "unit-of-work", "--lang", "go", "--full"]).stdout.toString();
+  expect(lean).toContain("## Outlines");
+  expect(lean).not.toContain("## Narrative");
+  expect(full).toContain("## Narrative");
+  expect(full).toContain("```go");
+  expect(lean.length).toBeLessThan(full.length / 2);
 });
