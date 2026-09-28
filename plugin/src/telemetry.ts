@@ -22,7 +22,7 @@ const DAY_MS    = 86_400_000;
 const TOOLS = new Set([
   "pre-tool", "post-tool", "user-prompt", "session-end", "skill-health", "status", "predict", "verify",
   "export", "reset-scores", "wipe", "concepts", "feedback", "verdict", "update-check", "update", "library", "teach",
-  "context", "explained", "independent"
+  "context", "explained", "independent", "progress", "goals", "connectors"
 ]);
 const COUNT_KEY = /^[a-z][a-z0-9_]{0,48}$/;
 const EXTENSION = /^\.[a-z0-9]{1,8}$/;

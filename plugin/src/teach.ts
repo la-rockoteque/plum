@@ -12,6 +12,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 
 import { LIBRARY_DIR, loadConcepts, type Concept } from "./library.js";
 import { fetchConcept } from "./library-cache.js";
 import { PLUM_DATA_DIR } from "./env.js";
+import { getDb, latestSessionId } from "./db.js";
 import { parseFlags } from "./feedback.js";
 import { getConfig, LOCALES, type Locale } from "./config.js";
 import { ensureGraph, graphOutline, graphSurvey, indexProject, codeMapBin, graphName, INSTALL_HINT } from "./codemap.js";
@@ -556,6 +557,16 @@ export function renderPlan(id: string, lang: string | undefined, fills: Fills, p
   return renderDeck(UI[plan.locale].lecture(tr(plan.concept.title)), slides, projectDir, plan.locale);
 }
 
+// A rendered lecture counts as studying the concept (used by progress and concept goals). Counts only.
+function recordLecture(c: Concept): void {
+  try {
+    getDb().run(
+      `INSERT INTO events (session_id, ts, event_type, category, delegated, verified, metadata) VALUES (?, ?, 'lecture', ?, 0, 0, ?)`,
+      [latestSessionId() ?? "manual", Date.now(), c.domain, JSON.stringify({ concept: c.id })]
+    );
+  } catch (e) { console.error(`[Plum] Couldn't record the lecture: ${(e as Error).message}`); }
+}
+
 // ─── `plum teach …` ──────────────────────────────────────────────────────────
 
 export async function runTeachCommand(argv: string[]): Promise<number> {
@@ -620,6 +631,7 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
           const out = flags.out ?? join(PLUM_DATA_DIR, "sessions", `${plan.concept.id}-${basename(process.env.CLAUDE_PROJECT_DIR ?? process.cwd())}.html`);
           mkdirSync(dirname(out), { recursive: true });
           writeFileSync(out, renderPlan(flags.plan, flags.lang, JSON.parse(fillsRaw) as Fills, undefined, plan.locale));
+          recordLecture(plan.concept);
           console.log(`${out}\n${plan.slides.length} slides`);
           return 0;
         }

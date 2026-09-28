@@ -121,6 +121,8 @@ The plugin wires up:
 | `/plum:verify` | Mark the last delegation as reviewed |
 | `/plum:explain` | Explain-back loop, logged with `plum explained` |
 | `/plum:teach <concept>` | Lecture deck on a concept, bound to the current repo's domain and architecture |
+| `/plum:goals` | Propose growth goals from your Plum data; optionally create them in a connected tool (Leapsome) |
+| `/plum:connect <connector>` | Create goals or sync progress through a connector, always showing the exact payload first |
 | `/plum:feedback <text>` | Draft feedback or a feature request, review it, then open a pre-filled form you submit yourself |
 
 **Strongly recommended:** install [code-map](docs/code-map.md) so `/plum:teach` binds concepts to your code from a
@@ -224,6 +226,10 @@ Set `PLUM_DATA_DIR` to move the data directory (and config) elsewhere.
 Send feedback, bugs and feature requests with `/plum:feedback`, or directly through the
 [feedback form](https://forms.gle/TCAnGgHfUjDg6KkWA). Claude shows you the exact text first, and nothing is sent
 until you click Submit. See [docs/feedback.md](docs/feedback.md).
+
+**Connectors** (e.g. Leapsome) are off by default, enabled only from your personal config, and send only goal titles,
+reasons, due dates and progress percentages — through your own connected MCP, after you confirm. See
+[docs/connectors/README.md](docs/connectors/README.md).
 
 **Usage statistics** are off by default, opt-in from your personal config only, stored locally as counts (never
 text, paths or names), and shared only if you submit a summary yourself —
