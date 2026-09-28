@@ -58,8 +58,9 @@ function logEvent(kind: "explanation" | "independence", domain: string, metadata
 }
 
 // An explanation is the second-strongest positive signal (full +3 on top of the verified delta, partial +1).
-export function logExplanation(domain: string, quality: "full" | "partial"): string {
-  logEvent("explanation", checkDomain(domain), { quality }, quality === "full" ? 3 : 1, false);
+export function logExplanation(domain: string, quality: "full" | "partial", concept?: string): string {
+  if (concept !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(concept)) throw new Error(`Invalid concept id "${concept}"`);
+  logEvent("explanation", checkDomain(domain), concept ? { quality, concept } : { quality }, quality === "full" ? 3 : 1, false);
   return `[Plum] Explanation logged for ${domain} (${quality}). Skill score updated. ✓`;
 }
 

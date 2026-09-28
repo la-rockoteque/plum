@@ -33,6 +33,8 @@ import { runFeedbackCommand }                         from "./feedback.js";
 import { runUpdateCheck, runUpdateCommand }           from "./update.js";
 import { runLibraryCommand }                          from "./library-cache.js";
 import { skillContext, logExplanation, logIndependence } from "./coaching.js";
+import { runProgressCommand, runGoalsCommand }        from "./progress.js";
+import { runConnectorsCommand, printGoalProgress }    from "./connectors.js";
 import { runTeachCommand }                            from "./teach.js";
 import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
@@ -76,7 +78,11 @@ async function main(): Promise<void> {
     case "library":      { process.exitCode = runLibraryCommand(process.argv.slice(3)); return; }
     case "teach":        { process.exitCode = await runTeachCommand(process.argv.slice(3)); return; }
     case "context":      return console.log(skillContext());
-    case "explained":    return userCommand(() => logExplanation(process.argv[3] ?? "", process.argv.includes("partial") ? "partial" : "full"));
+    case "explained":    return userCommand(() => logExplanation(process.argv[3] ?? "", process.argv.includes("partial") ? "partial" : "full",
+                           process.argv.includes("--concept") ? process.argv[process.argv.indexOf("--concept") + 1] : undefined));
+    case "progress":     { process.exitCode = runProgressCommand(process.argv.slice(3)); return; }
+    case "goals":        { process.exitCode = process.argv[3] === "progress" ? printGoalProgress(process.argv.includes("--json")) : runGoalsCommand(process.argv.slice(3)); return; }
+    case "connectors":   { process.exitCode = runConnectorsCommand(process.argv.slice(3)); return; }
     case "independent":  return userCommand(() => logIndependence(process.argv[3] ?? ""));
     case "install":      return console.log(INSTALL_HELP);
     case "uninstall":    return uninstallHooks();
@@ -109,6 +115,10 @@ Plum — Professor Plum cognitive atrophy harness
     context       skill scores, at-risk domains, coaching guidance and active patterns
     explained <domain> [--quality full|partial]   log a successful explain-back
     independent <domain>                          log that the user solved it themselves
+    progress      habits, concepts studied and skill scores over a period (--days N, --json)
+    goals         propose [--json] | progress [--json] — measurable goals from your own actions
+    connectors    list | status [id] | enable <id> | disable <id> | payload <id> <capability> [proposal] |
+                  link <id> <proposal> <externalId> | links [id] | unlink <id> <proposal>
     export        dump DB to JSON (stdout)
     reset-scores  reset all skill scores to 50
     wipe          delete all data in ~/.plum/ (irreversible)

@@ -24,6 +24,7 @@ export interface PlumConfig {
     formUrl: string;      // https Google Form "viewform" URL
     entryId: string;      // the paragraph field that receives the text, "entry.<digits>"
   };
+  connectors: Record<string, { enabled: boolean }>;   // opt-in, personal/local only (see resolveConfig)
   teach: {
     codeMap: "auto" | "required" | "off";   // code-map graph for precise role binding (docs/code-map.md)
   };
@@ -70,6 +71,7 @@ export const DEFAULTS: PlumConfig = {
     formUrl: "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     entryId: "entry.1018508464"
   },
+  connectors: {},
   teach: {
     codeMap: "auto"
   },
@@ -90,7 +92,8 @@ export const DEFAULTS: PlumConfig = {
   }
 };
 
-type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates" | "library" | "teach">> & {
+type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates" | "library" | "teach" | "connectors">> & {
+  connectors?: Record<string, { enabled?: boolean }>;
   teach?: Partial<PlumConfig["teach"]>;
   library?: Partial<PlumConfig["library"]>;
   updates?: Partial<PlumConfig["updates"]>;
@@ -121,6 +124,7 @@ export function resolveConfig({ shared: rawShared = {}, personal = {}, local = {
     feedback:   { ...acc.feedback,   ...l.feedback },
     library:    { ...acc.library,    ...l.library },
     teach:      { ...acc.teach,      ...l.teach },
+    connectors: acc.connectors,
     telemetry:  acc.telemetry,
     updates:    acc.updates
   }), DEFAULTS);
@@ -138,8 +142,17 @@ export function resolveConfig({ shared: rawShared = {}, personal = {}, local = {
     sharedMode === "off" ? "off" : personalMode ?? (sharedMode === "silent" ? "prompt" : sharedMode) ?? DEFAULTS.updates.mode;
   const hours = local.updates?.checkIntervalHours ?? personal.updates?.checkIntervalHours ?? shared.updates?.checkIntervalHours;
 
+  // Connectors send data out, so like statistics: only personal/local can enable one, a shared `false` wins.
+  const ids = new Set([shared, personal, local].flatMap((l) => Object.keys(l.connectors ?? {})));
+  const connectors = Object.fromEntries([...ids].map((id) => {
+    const vetoed = shared.connectors?.[id]?.enabled === false;
+    const chosen = local.connectors?.[id]?.enabled ?? personal.connectors?.[id]?.enabled ?? false;
+    return [id, { enabled: !vetoed && chosen === true }];
+  }));
+
   return {
     ...merged,
+    connectors,
     updates: {
       mode: updateMode,
       checkIntervalHours: typeof hours === "number" && hours >= 0 && hours <= 24 * 30 ? hours : DEFAULTS.updates.checkIntervalHours
@@ -189,7 +202,7 @@ function mergeLayers(a: Layer, b: Layer): Layer {
   return {
     ...a, ...b,
     thresholds: { ...a.thresholds, ...b.thresholds }, domains: { ...a.domains, ...b.domains },
-    feedback: { ...a.feedback, ...b.feedback }, library: { ...a.library, ...b.library }, teach: { ...a.teach, ...b.teach },
+    feedback: { ...a.feedback, ...b.feedback }, library: { ...a.library, ...b.library }, teach: { ...a.teach, ...b.teach }, connectors: { ...a.connectors, ...b.connectors },
     telemetry: { ...a.telemetry, ...b.telemetry }, updates: { ...a.updates, ...b.updates }
   };
 }

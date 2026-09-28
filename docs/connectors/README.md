@@ -1,6 +1,8 @@
 # Connectors — design (draft)
 
-Status: brainstorm on `research/connectors-leapsome`. Nothing here is implemented yet.
+Status: first slice implemented on `research/connectors-leapsome` — core commands (`plum progress`, `plum goals`,
+`plum connectors`), the Leapsome connector, and the `/plum:goals` and `/plum:connect` skills. Goals use only the
+user's own actions (predict rate, explain-backs, concepts studied); skill scores are shown but never become goals.
 
 **Goal:** let a user take what Plum measures — skill scores, trends, engagement habits, concepts studied — into the
 tools where they track their growth (first: Leapsome goals), without Plum becoming an integration platform or
