@@ -351,6 +351,11 @@ function runManualVerify(): void {
 
   const sessionId = sessionArg ?? latestSessionId() ?? "manual";
   const marked = manualVerify(sessionId, isNaN(count) ? 1 : count);
+  if (marked > 0) {
+    // The user checked Claude's work: an engagement signal for scoring v2.
+    getDb().run(`INSERT INTO events (session_id, ts, event_type, delegated, verified, metadata) VALUES (?, ?, 'manual_verify', 0, 1, ?)`,
+      [sessionId, Date.now(), JSON.stringify({ marked })]);
+  }
   if (marked === 0) {
     console.log("[Plum] No recent unverified delegations found in the last hour.");
   } else {

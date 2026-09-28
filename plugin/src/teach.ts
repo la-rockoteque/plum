@@ -14,6 +14,7 @@ import { fetchConcept } from "./library-cache.js";
 import { PLUM_DATA_DIR } from "./env.js";
 import { getDb, latestSessionId } from "./db.js";
 import { parseFlags } from "./feedback.js";
+import { getConfig, LOCALES, type Locale } from "./config.js";
 import { ensureGraph, graphOutline, graphSurvey, indexProject, codeMapBin, graphName, INSTALL_HINT } from "./codemap.js";
 
 // ─── match ───────────────────────────────────────────────────────────────────
@@ -279,6 +280,48 @@ export function conceptBrief(id: string, lang: string | undefined, full = false)
   return lines.join("\n");
 }
 
+// ─── deck chrome, per locale ─────────────────────────────────────────────────
+// Concept prose is translated per deck by Claude (the `translations` slot); only the fixed labels live here.
+
+const UI = {
+  en: {
+    lecture: (t: string) => `${t} Lecture`, kicker: (cat: string) => `Lecture · ${cat}`,
+    predict: "Before we start — predict", predictLede: "Write your guess down. We'll come back to it.",
+    problem: "The problem in your code", hurts: "Where it hurts", idea: "The idea",
+    roles: "Roles", rolesTitle: "The roles, in your repo", headers: ["Role", "What it is", "Yours"],
+    stage: (i: number, n: number) => `Stage ${i} of ${n} · canonical example`,
+    domain: "In your domain (illustrative)", sameMove: "The same move, in your code",
+    canonical: "Canonical", yours: "Yours (illustrative)",
+    tradeoffs: "Trade-offs", whenNot: "When not to", watch: "Watch out", misconceptions: "Common misconceptions",
+    check: "Check your understanding", explainBack: "Explain it back", tryIt: "Try it", exercise: "Your exercise",
+    run: (cmd: string, lang: string) => `Run the canonical example: \`${cmd}\` (in Plum's library/examples/${lang}).`,
+    recap: "Recap", keep: "Three things to keep", recapLede: "Now check your opening prediction.",
+    reveal: "Reveal", notes: "Notes", keys: "Scroll, ← → or space to move · N for notes"
+  },
+  fr: {
+    lecture: (t: string) => `Cours : ${t}`, kicker: (cat: string) => `Cours · ${cat}`,
+    predict: "Avant de commencer — prédis", predictLede: "Note ta réponse. On y reviendra.",
+    problem: "Le problème dans ton code", hurts: "Là où ça fait mal", idea: "L'idée",
+    roles: "Rôles", rolesTitle: "Les rôles, dans ton repo", headers: ["Rôle", "Ce que c'est", "Chez toi"],
+    stage: (i: number, n: number) => `Étape ${i} sur ${n} · exemple canonique`,
+    domain: "Dans ton domaine (illustratif)", sameMove: "Le même geste, dans ton code",
+    canonical: "Canonique", yours: "Chez toi (illustratif)",
+    tradeoffs: "Compromis", whenNot: "Quand s'en passer", watch: "Attention", misconceptions: "Idées reçues",
+    check: "Vérifie ta compréhension", explainBack: "Explique-le en retour", tryIt: "À toi", exercise: "Ton exercice",
+    run: (cmd: string, lang: string) => `Lance l'exemple canonique : \`${cmd}\` (dans library/examples/${lang} de Plum).`,
+    recap: "Récap", keep: "Trois choses à retenir", recapLede: "Reviens maintenant à ta prédiction de départ.",
+    reveal: "Réponse", notes: "Notes", keys: "Défile, ← → ou espace pour avancer · N pour les notes"
+  }
+} satisfies Record<Locale, unknown>;
+
+const LOCALE_NAME: Record<Locale, string> = { en: "English", fr: "French" };
+
+function checkLocale(locale: string | undefined): Locale {
+  const l = locale ?? getConfig().locale;
+  if (!LOCALES.includes(l as Locale)) throw new Error(`Unknown locale "${l}" — expected one of ${LOCALES.join("|")}`);
+  return l as Locale;
+}
+
 // ─── render ──────────────────────────────────────────────────────────────────
 
 export const SLIDE_KINDS = ["title", "question", "problem", "idea", "diagram", "binding", "before", "after", "compare",
@@ -308,6 +351,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 const inline = (s: string) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
 let refRoot = process.cwd();
+let ui: (typeof UI)[Locale] = UI.en;
 
 function codeHtml(block: CodeBlock): string {
   const c = resolveCodeRef(block, refRoot);
@@ -345,21 +389,23 @@ function slideHtml(s: Slide, index: number): string {
   }
   if (s.quiz?.length) {
     out.push(`<ol class="quiz-list">${s.quiz.map((q) =>
-      `<li><p>${inline(q.q)}</p><details class="answer"><summary>Reveal</summary><p>${inline(q.a)}</p></details></li>`).join("")}</ol>`);
+      `<li><p>${inline(q.q)}</p><details class="answer"><summary>${ui.reveal}</summary><p>${inline(q.a)}</p></details></li>`).join("")}</ol>`);
   }
   if (s.notes) out.push(`<aside class="notes">${inline(s.notes)}</aside>`);
   return `<section class="slide" id="s${index + 1}" data-kind="${s.kind}">\n  ${out.join("\n  ")}\n</section>`;
 }
 
-export function renderDeck(title: string, slides: Slide[], projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd()): string {
+export function renderDeck(title: string, slides: Slide[], projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), locale: Locale = "en"): string {
   refRoot = projectDir;
+  ui = UI[locale];
   const template = readFileSync(join(LIBRARY_DIR, "deck", "template.html"), "utf-8");
   const start = template.indexOf("<!-- SLIDES:START -->");
   const end = template.indexOf("<!-- SLIDES:END -->");
   if (start < 0 || end < 0) throw new Error("deck template is missing its SLIDES markers");
   const body = slides.map((slide, i) => slideHtml(slide, i)).join("\n\n");
   return (template.slice(0, start) + `<!-- SLIDES:START -->\n\n${body}\n\n` + template.slice(end))
-    .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
+    .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)
+    .replace(`>${UI.en.notes}<`, `>${ui.notes}<`).replace(UI.en.keys, ui.keys);
 }
 
 // ─── reusable plans ──────────────────────────────────────────────────────────
@@ -378,10 +424,12 @@ export interface Fills {
   exercise?: string[];
   recap?: string[];
   notes?: Record<string, string>;      // optional speaker notes by slide title
+  translations?: string[];     // non-English decks: one per plan source string, same order
 }
 const REQUIRED: (keyof Fills)[] = ["meta", "question", "problem", "problemText", "bindings", "yours", "answers", "exercise", "recap"];
 
-export interface Plan { concept: Concept; lang: string; slides: Slide[]; slots: { name: string; hint: string }[] }
+// `sources` are the concept strings shown on slides; a non-English deck needs one translation for each.
+export interface Plan { concept: Concept; lang: string; locale: Locale; slides: Slide[]; sources: string[]; slots: { name: string; hint: string }[] }
 
 function sections(md: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -403,7 +451,9 @@ const firstParagraph = (text: string) => plain(text.replace(/```[\s\S]*?```/g, "
 const firstFence = (text: string) => /```[^\n]*\n([\s\S]*?)```/.exec(text)?.[1]?.trimEnd();
 const section = (secs: Record<string, string>, re: RegExp) => Object.entries(secs).find(([k]) => re.test(k))?.[1] ?? "";
 
-export function buildPlan(id: string, lang?: string): Plan {
+export function buildPlan(id: string, lang?: string, localeArg?: string): Plan {
+  const locale = checkLocale(localeArg);
+  const t = UI[locale];
   const c = loadConcepts().find((x) => x.id === id);
   if (!c) throw new Error(`Unknown concept "${id}". Try \`plum teach match "<question>"\`.`);
   const chosen = lang && c.examples[lang] ? lang : Object.keys(c.examples)[0];
@@ -414,38 +464,41 @@ export function buildPlan(id: string, lang?: string): Plan {
   const ref = (file: string) => ({ ref: `example:${c.id}/${chosen}/${file}` });
   const stageFile = (stageId: string) => ex.stages[stageId]?.find((f) => !/test|spec/i.test(f)) ?? ex.stages[stageId]?.[0];
 
+  const ideaText = firstParagraph(idea);
+  const trade = listItems(section(secs, /trade-?off|when not|cost/));
+  const mis = listItems(section(secs, /misconception/));
   const slides: Slide[] = [
-    { kind: "title", eyebrow: `Lecture · ${c.category}`, title: c.title, lede: c.summary, meta: "{{meta}}" },
-    { kind: "question", eyebrow: "Before we start — predict", title: "{{question}}", lede: "Write your guess down. We'll come back to it." },
-    { kind: "problem", eyebrow: "The problem in your code", title: "Where it hurts", text: ["{{problemText}}"], code: { ref: "{{problem}}" } },
-    { kind: "idea", eyebrow: "The idea", title: c.title, text: [firstParagraph(idea)].filter(Boolean), diagram: firstFence(idea) },
-    { kind: "binding", eyebrow: "Roles", title: "The roles, in your repo",
-      table: { headers: ["Role", "What it is", "Yours"], rows: Object.entries(c.roles).map(([k, v]) => [`\`${k}\``, v, `{{bindings.${k}}}`]) } }
+    { kind: "title", eyebrow: t.kicker(c.category), title: c.title, lede: c.summary, meta: "{{meta}}" },
+    { kind: "question", eyebrow: t.predict, title: "{{question}}", lede: t.predictLede },
+    { kind: "problem", eyebrow: t.problem, title: t.hurts, text: ["{{problemText}}"], code: { ref: "{{problem}}" } },
+    { kind: "idea", eyebrow: t.idea, title: c.title, text: [ideaText].filter(Boolean), diagram: firstFence(idea) },
+    { kind: "binding", eyebrow: t.roles, title: t.rolesTitle,
+      table: { headers: t.headers, rows: Object.entries(c.roles).map(([k, v]) => [`\`${k}\``, v, `{{bindings.${k}}}`]) } }
   ];
   const stages = c.stages;
   stages.forEach((st, i) => {
     const kind: Slide["kind"] = i === 0 ? "before" : i === stages.length - 1 ? "after" : "compare";
     const f = stageFile(st.id);
-    slides.push({ kind, eyebrow: `Stage ${i + 1} of ${stages.length} · canonical example`, title: st.title, text: [st.idea],
+    slides.push({ kind, eyebrow: t.stage(i + 1, stages.length), title: st.title, text: [st.idea],
       ...(f ? { code: ref(f) } : {}) });
   });
-  slides.push({ kind: "compare", eyebrow: "In your domain (illustrative)", title: "The same move, in your code",
+  slides.push({ kind: "compare", eyebrow: t.domain, title: t.sameMove,
     cols: [
-      { tag: "after", label: "Canonical", ...(stageFile(stages.at(-1)!.id) ? { code: ref(stageFile(stages.at(-1)!.id)!) } : {}) },
-      { tag: "yours", label: "Yours (illustrative)", code: { ref: "{{yours}}" } }
+      { tag: "after", label: t.canonical, ...(stageFile(stages.at(-1)!.id) ? { code: ref(stageFile(stages.at(-1)!.id)!) } : {}) },
+      { tag: "yours", label: t.yours, code: { ref: "{{yours}}" } }
     ] });
-  const trade = listItems(section(secs, /trade-?off|when not|cost/));
-  if (trade.length) slides.push({ kind: "tradeoff", eyebrow: "Trade-offs", title: "When not to", bullets: trade });
-  const mis = listItems(section(secs, /misconception/));
-  if (mis.length) slides.push({ kind: "idea", eyebrow: "Watch out", title: "Common misconceptions", bullets: mis });
-  slides.push({ kind: "quiz", eyebrow: "Check your understanding", title: "Explain it back", quiz: c.checks.map((q, i) => ({ q, a: `{{answers.${i}}}` })) });
-  slides.push({ kind: "exercise", eyebrow: "Try it", title: "Your exercise", bullets: ["{{exercise}}"],
-    text: [`Run the canonical example: \`${ex.run}\` (in Plum's library/examples/${chosen}).`] });
-  slides.push({ kind: "recap", eyebrow: "Recap", title: "Three things to keep", bullets: ["{{recap}}"], lede: "Now check your opening prediction." });
+  if (trade.length) slides.push({ kind: "tradeoff", eyebrow: t.tradeoffs, title: t.whenNot, bullets: trade });
+  if (mis.length) slides.push({ kind: "idea", eyebrow: t.watch, title: t.misconceptions, bullets: mis });
+  slides.push({ kind: "quiz", eyebrow: t.check, title: t.explainBack, quiz: c.checks.map((q, i) => ({ q, a: `{{answers.${i}}}` })) });
+  slides.push({ kind: "exercise", eyebrow: t.tryIt, title: t.exercise, bullets: ["{{exercise}}"],
+    text: [t.run(ex.run, chosen)] });
+  slides.push({ kind: "recap", eyebrow: t.recap, title: t.keep, bullets: ["{{recap}}"], lede: t.recapLede });
+  const sources = [...new Set([c.title, c.summary, c.category, ideaText, ...Object.values(c.roles),
+    ...stages.flatMap((st) => [st.title, st.idea]), ...trade, ...mis, ...c.checks].filter(Boolean))];
 
   const roles = Object.keys(c.roles);
   return {
-    concept: c, lang: chosen, slides,
+    concept: c, lang: chosen, locale, slides, sources,
     slots: [
       { name: "meta", hint: `string — "Bound to: <repo> · ${chosen} · <framework> · ~N min"` },
       { name: "question", hint: "string — a predict-first question about their code" },
@@ -455,27 +508,33 @@ export function buildPlan(id: string, lang?: string): Plan {
       { name: "yours", hint: '{ "lang": "…", "text": "…" } — the after stage rewritten in their domain, short (illustrative)' },
       { name: "answers", hint: `string[${c.checks.length}] — one answer per quiz question, referencing their code` },
       { name: "exercise", hint: "string[] — 1–3 concrete changes in their repo, with file paths" },
-      { name: "recap", hint: "string[3] — three takeaways" }
+      { name: "recap", hint: "string[3] — three takeaways" },
+      ...(locale === "en" ? [] : [{ name: "translations",
+        hint: `string[${sources.length}] — the ${LOCALE_NAME[locale]} translation of each numbered source string below, same order; keep \`code\` spans and identifiers as-is` }])
     ]
   };
 }
 
-export function renderPlan(id: string, lang: string | undefined, fills: Fills, projectDir?: string): string {
-  const plan = buildPlan(id, lang);
-  const missing = REQUIRED.filter((k) => fills[k] === undefined);
+export function renderPlan(id: string, lang: string | undefined, fills: Fills, projectDir?: string, locale?: string): string {
+  const plan = buildPlan(id, lang, locale);
+  const missing = [...REQUIRED, ...(plan.locale === "en" ? [] : ["translations" as const])].filter((k) => fills[k] === undefined);
   if (missing.length) throw new Error(`Missing slots: ${missing.join(", ")}`);
   const roles = Object.keys(plan.concept.roles);
   const unbound = roles.filter((r) => !(r in (fills.bindings ?? {})));
   if (unbound.length) throw new Error(`bindings is missing roles: ${unbound.join(", ")}`);
   if ((fills.answers ?? []).length !== plan.concept.checks.length) throw new Error(`answers needs ${plan.concept.checks.length} entries`);
+  if (plan.locale !== "en" && fills.translations!.length !== plan.sources.length) throw new Error(`translations needs ${plan.sources.length} entries`);
+  const translated = new Map(plan.locale === "en" ? [] : plan.sources.map((src, i) => [src, fills.translations![i]]));
+  const tr = (v: string) => translated.get(v) ?? v;
 
-  const str = (v: string) => v
+  const str = (v: string) => tr(v)
     .replace("{{meta}}", fills.meta!).replace("{{question}}", fills.question!).replace("{{problemText}}", fills.problemText!)
     .replace(/\{\{bindings\.(.+?)\}\}/, (_, k) => fills.bindings![k])
     .replace(/\{\{answers\.(\d+)\}\}/, (_, i) => fills.answers![Number(i)]);
   const firstStageCode = plan.slides.find((s) => s.kind === "before")?.code;
   const slides = plan.slides.map((s): Slide => {
     const next: Slide = { ...s, title: str(s.title) };
+    if (s.kind === "title") next.eyebrow = UI[plan.locale].kicker(tr(plan.concept.category));
     if (next.meta) next.meta = str(next.meta);
     if (next.text) next.text = next.text.map(str);
     if (next.bullets) next.bullets = next.bullets.flatMap((b) => b === "{{exercise}}" ? fills.exercise! : b === "{{recap}}" ? fills.recap! : [str(b)]);
@@ -485,16 +544,17 @@ export function renderPlan(id: string, lang: string | undefined, fills: Fills, p
       const missingCells: [number, number][] = [];
       next.table = { ...next.table, rows: next.table.rows.map((row, r) => row.map((cell, col) => {
         const v = str(cell);
-        if (col === 2 && /^missing$/i.test(v.trim())) missingCells.push([r, col]);
+        if (col === 2 && /^(missing|manquant)$/i.test(v.trim())) missingCells.push([r, col]);
         return v;
       })), missing: missingCells };
     }
-    if (next.quiz) next.quiz = next.quiz.map((q) => ({ q: q.q, a: str(q.a) }));
+    if (next.lede) next.lede = str(next.lede);
+    if (next.quiz) next.quiz = next.quiz.map((q) => ({ q: str(q.q), a: str(q.a) }));
     const note = fills.notes?.[s.title];
     if (note) next.notes = note;
     return next;
   });
-  return renderDeck(`${plan.concept.title} Lecture`, slides, projectDir);
+  return renderDeck(UI[plan.locale].lecture(tr(plan.concept.title)), slides, projectDir, plan.locale);
 }
 
 // A rendered lecture counts as studying the concept (used by progress and concept goals). Counts only.
@@ -554,21 +614,23 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         return 0;
       case "plan": {
         if (!positional[0]) { console.error("Usage: plum teach plan <concept> [--lang L]"); return 1; }
-        const plan = buildPlan(positional[0], flags.lang);
+        const plan = buildPlan(positional[0], flags.lang, flags.locale);
+        const loc = plan.locale === "en" ? "" : ` --locale ${plan.locale}`;
         console.log([
-          `Plan for ${plan.concept.id} (${plan.lang}): ${plan.slides.length} slides generated. Fill these slots as one JSON object,`,
-          `then: plum teach render --plan ${plan.concept.id} --lang ${plan.lang} --fill <fills.json>`,
-          ...plan.slots.map((s) => `- ${s.name}: ${s.hint}`)
+          `Plan for ${plan.concept.id} (${plan.lang}${loc ? `, ${LOCALE_NAME[plan.locale]}` : ""}): ${plan.slides.length} slides generated. Fill these slots as one JSON object,`,
+          `then: plum teach render --plan ${plan.concept.id} --lang ${plan.lang}${loc} --fill <fills.json>`,
+          ...plan.slots.map((s) => `- ${s.name}: ${s.hint}`),
+          ...(loc ? ["", `Write every slot in ${LOCALE_NAME[plan.locale]}. Source strings to translate:`, ...plan.sources.map((x, i) => `${i}. ${x}`)] : [])
         ].join("\n"));
         return 0;
       }
       case "render": {
         if (flags.plan) {
           const fillsRaw = flags.fill ? readFileSync(flags.fill, "utf-8") : await Bun.stdin.text();
-          const plan = buildPlan(flags.plan, flags.lang);
+          const plan = buildPlan(flags.plan, flags.lang, flags.locale);
           const out = flags.out ?? join(PLUM_DATA_DIR, "sessions", `${plan.concept.id}-${basename(process.env.CLAUDE_PROJECT_DIR ?? process.cwd())}.html`);
           mkdirSync(dirname(out), { recursive: true });
-          writeFileSync(out, renderPlan(flags.plan, flags.lang, JSON.parse(fillsRaw) as Fills));
+          writeFileSync(out, renderPlan(flags.plan, flags.lang, JSON.parse(fillsRaw) as Fills, undefined, plan.locale));
           recordLecture(plan.concept);
           console.log(`${out}\n${plan.slides.length} slides`);
           return 0;
@@ -579,12 +641,12 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         const title = flags.title ?? slides[0].title;
         const out = flags.out ?? join(PLUM_DATA_DIR, "sessions", `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.html`);
         mkdirSync(dirname(out), { recursive: true });
-        writeFileSync(out, renderDeck(title, slides));
+        writeFileSync(out, renderDeck(title, slides, undefined, checkLocale(flags.locale)));
         console.log(`${out}\n${slides.length} slides`);
         return 0;
       }
       default:
-        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | index [dir] | plan <concept> [--lang L] | render --plan <concept> --fill F | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
+        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | index [dir] | plan <concept> [--lang L] [--locale en|fr] | render --plan <concept> --fill F [--locale en|fr] | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
         return 1;
     }
   } catch (e) {
