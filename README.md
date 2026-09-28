@@ -160,6 +160,7 @@ is treated as shared.
 {
   "enabled": true,
   "mode": "coach",                     // "coach" | "gating"
+  "locale": "en",                      // "en" | "fr" — language of /plum:teach decks (any layer; a team can commit "fr")
   "minEventsBeforeIntervene": 8,       // calibration gate
   "interventionCooldownMs": 1800000,   // min gap between repeats of the same nudge
   "thresholds": {

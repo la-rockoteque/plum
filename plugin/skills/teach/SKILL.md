@@ -19,6 +19,7 @@ P="${CLAUDE_PLUGIN_ROOT}/bin/plum"
 "$P" teach match "$ARGUMENTS"
 ```
 
+Concepts are indexed in English: if the question is in another language, pass English keywords.
 Prints up to five `id — title: summary` lines (an exact id ranks first). Choose one. If none fits, say which
 concepts exist and offer the closest; don't pretend the library covers it.
 
@@ -77,6 +78,12 @@ don't write it. Write only the slots as one small JSON object to a scratch file,
   "notes": { "<slide title>": "optional speaker notes" }
 }
 ```
+
+**Language.** Decks follow the `locale` config (`en` by default). If the user writes in French, add `--locale fr`
+to both `plan` and `render`: the chrome is French, every slot is written in French, and the plan adds a
+`translations` slot — one French string per numbered source string it prints (concept title, summary, roles,
+stages, trade-offs, checks), same order. Keep `code` spans and identifiers untranslated. `"missing"` may be
+`"manquant"`.
 
 Every slot is required (`problem` may be `null` to reuse the canonical before), `bindings` needs every role the plan
 lists, and `answers` one entry per quiz question — the renderer says what's missing. Use a `ref` with a line range
