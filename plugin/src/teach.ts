@@ -361,6 +361,141 @@ export function renderDeck(title: string, slides: Slide[], projectDir = process.
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
 }
 
+// ─── reusable plans ──────────────────────────────────────────────────────────
+// Most of a lecture is the same for every repo, so it's generated from the manifest and narrative. Claude fills
+// only the repo-specific slots (a small JSON object) and the renderer merges them.
+
+type CodeSlot = CodeBlock | null;
+export interface Fills {
+  meta?: string;
+  question?: string;
+  problem?: CodeSlot;          // a real excerpt from their repo ({ref:"repo:…", lines}); null = use the canonical before
+  problemText?: string;
+  bindings?: Record<string, string>;   // canonical role → their type/file, or "missing"
+  yours?: CodeBlock;           // the after stage, rewritten in their domain (illustrative)
+  answers?: string[];          // one per manifest check
+  exercise?: string[];
+  recap?: string[];
+  notes?: Record<string, string>;      // optional speaker notes by slide title
+}
+const REQUIRED: (keyof Fills)[] = ["meta", "question", "problem", "problemText", "bindings", "yours", "answers", "exercise", "recap"];
+
+export interface Plan { concept: Concept; lang: string; slides: Slide[]; slots: { name: string; hint: string }[] }
+
+function sections(md: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let current = "";
+  for (const line of md.split("\n")) {
+    const h = /^##\s+(.+)$/.exec(line);
+    if (h) { current = h[1].toLowerCase(); out[current] = ""; continue; }
+    if (current) out[current] += line + "\n";
+  }
+  return out;
+}
+const plain = (s: string) => s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/\s+/g, " ").trim();
+function listItems(text: string, max = 4): string[] {
+  const items = text.split("\n").filter((l) => /^\s*([-*]|\d+\.)\s+/.test(l)).map((l) => plain(l.replace(/^\s*([-*]|\d+\.)\s+/, "")));
+  if (items.length) return items.slice(0, max);
+  return plain(text.replace(/```[\s\S]*?```/g, "")).split(/(?<=\.)\s+/).filter((x) => x.length > 20).slice(0, max);
+}
+const firstParagraph = (text: string) => plain(text.replace(/```[\s\S]*?```/g, "").split(/\n\s*\n/).find((p) => p.trim() && !/^\s*[|>-]/.test(p)) ?? "");
+const firstFence = (text: string) => /```[^\n]*\n([\s\S]*?)```/.exec(text)?.[1]?.trimEnd();
+const section = (secs: Record<string, string>, re: RegExp) => Object.entries(secs).find(([k]) => re.test(k))?.[1] ?? "";
+
+export function buildPlan(id: string, lang?: string): Plan {
+  const c = loadConcepts().find((x) => x.id === id);
+  if (!c) throw new Error(`Unknown concept "${id}". Try \`plum teach match "<question>"\`.`);
+  const chosen = lang && c.examples[lang] ? lang : Object.keys(c.examples)[0];
+  const ex = c.examples[chosen];
+  const mdPath = join(LIBRARY_DIR, "concepts", c.id, "CONCEPT.md");
+  const secs = existsSync(mdPath) ? sections(readFileSync(mdPath, "utf-8")) : {};
+  const idea = section(secs, /the idea/);
+  const ref = (file: string) => ({ ref: `example:${c.id}/${chosen}/${file}` });
+  const stageFile = (stageId: string) => ex.stages[stageId]?.find((f) => !/test|spec/i.test(f)) ?? ex.stages[stageId]?.[0];
+
+  const slides: Slide[] = [
+    { kind: "title", eyebrow: `Lecture · ${c.category}`, title: c.title, lede: c.summary, meta: "{{meta}}" },
+    { kind: "question", eyebrow: "Before we start — predict", title: "{{question}}", lede: "Write your guess down. We'll come back to it." },
+    { kind: "problem", eyebrow: "The problem in your code", title: "Where it hurts", text: ["{{problemText}}"], code: { ref: "{{problem}}" } },
+    { kind: "idea", eyebrow: "The idea", title: c.title, text: [firstParagraph(idea)].filter(Boolean), diagram: firstFence(idea) },
+    { kind: "binding", eyebrow: "Roles", title: "The roles, in your repo",
+      table: { headers: ["Role", "What it is", "Yours"], rows: Object.entries(c.roles).map(([k, v]) => [`\`${k}\``, v, `{{bindings.${k}}}`]) } }
+  ];
+  const stages = c.stages;
+  stages.forEach((st, i) => {
+    const kind: Slide["kind"] = i === 0 ? "before" : i === stages.length - 1 ? "after" : "compare";
+    const f = stageFile(st.id);
+    slides.push({ kind, eyebrow: `Stage ${i + 1} of ${stages.length} · canonical example`, title: st.title, text: [st.idea],
+      ...(f ? { code: ref(f) } : {}) });
+  });
+  slides.push({ kind: "compare", eyebrow: "In your domain (illustrative)", title: "The same move, in your code",
+    cols: [
+      { tag: "after", label: "Canonical", ...(stageFile(stages.at(-1)!.id) ? { code: ref(stageFile(stages.at(-1)!.id)!) } : {}) },
+      { tag: "yours", label: "Yours (illustrative)", code: { ref: "{{yours}}" } }
+    ] });
+  const trade = listItems(section(secs, /trade-?off|when not|cost/));
+  if (trade.length) slides.push({ kind: "tradeoff", eyebrow: "Trade-offs", title: "When not to", bullets: trade });
+  const mis = listItems(section(secs, /misconception/));
+  if (mis.length) slides.push({ kind: "idea", eyebrow: "Watch out", title: "Common misconceptions", bullets: mis });
+  slides.push({ kind: "quiz", eyebrow: "Check your understanding", title: "Explain it back", quiz: c.checks.map((q, i) => ({ q, a: `{{answers.${i}}}` })) });
+  slides.push({ kind: "exercise", eyebrow: "Try it", title: "Your exercise", bullets: ["{{exercise}}"],
+    text: [`Run the canonical example: \`${ex.run}\` (in Plum's library/examples/${chosen}).`] });
+  slides.push({ kind: "recap", eyebrow: "Recap", title: "Three things to keep", bullets: ["{{recap}}"], lede: "Now check your opening prediction." });
+
+  const roles = Object.keys(c.roles);
+  return {
+    concept: c, lang: chosen, slides,
+    slots: [
+      { name: "meta", hint: `string — "Bound to: <repo> · ${chosen} · <framework> · ~N min"` },
+      { name: "question", hint: "string — a predict-first question about their code" },
+      { name: "problem", hint: '{ "ref": "repo:<path>", "lines": "a-b" } — a real excerpt showing the problem, or null to use the canonical before' },
+      { name: "problemText", hint: "string — one sentence on what's wrong in that excerpt" },
+      { name: "bindings", hint: `object — their type/file (or "missing") for each role: ${roles.join(", ")}` },
+      { name: "yours", hint: '{ "lang": "…", "text": "…" } — the after stage rewritten in their domain, short (illustrative)' },
+      { name: "answers", hint: `string[${c.checks.length}] — one answer per quiz question, referencing their code` },
+      { name: "exercise", hint: "string[] — 1–3 concrete changes in their repo, with file paths" },
+      { name: "recap", hint: "string[3] — three takeaways" }
+    ]
+  };
+}
+
+export function renderPlan(id: string, lang: string | undefined, fills: Fills, projectDir?: string): string {
+  const plan = buildPlan(id, lang);
+  const missing = REQUIRED.filter((k) => fills[k] === undefined);
+  if (missing.length) throw new Error(`Missing slots: ${missing.join(", ")}`);
+  const roles = Object.keys(plan.concept.roles);
+  const unbound = roles.filter((r) => !(r in (fills.bindings ?? {})));
+  if (unbound.length) throw new Error(`bindings is missing roles: ${unbound.join(", ")}`);
+  if ((fills.answers ?? []).length !== plan.concept.checks.length) throw new Error(`answers needs ${plan.concept.checks.length} entries`);
+
+  const str = (v: string) => v
+    .replace("{{meta}}", fills.meta!).replace("{{question}}", fills.question!).replace("{{problemText}}", fills.problemText!)
+    .replace(/\{\{bindings\.(.+?)\}\}/, (_, k) => fills.bindings![k])
+    .replace(/\{\{answers\.(\d+)\}\}/, (_, i) => fills.answers![Number(i)]);
+  const firstStageCode = plan.slides.find((s) => s.kind === "before")?.code;
+  const slides = plan.slides.map((s): Slide => {
+    const next: Slide = { ...s, title: str(s.title) };
+    if (next.meta) next.meta = str(next.meta);
+    if (next.text) next.text = next.text.map(str);
+    if (next.bullets) next.bullets = next.bullets.flatMap((b) => b === "{{exercise}}" ? fills.exercise! : b === "{{recap}}" ? fills.recap! : [str(b)]);
+    if (next.code?.ref === "{{problem}}") next.code = fills.problem ?? firstStageCode;
+    if (next.cols) next.cols = next.cols.map((c) => c.code?.ref === "{{yours}}" ? { ...c, code: fills.yours! } : c);
+    if (next.table) {
+      const missingCells: [number, number][] = [];
+      next.table = { ...next.table, rows: next.table.rows.map((row, r) => row.map((cell, col) => {
+        const v = str(cell);
+        if (col === 2 && /^missing$/i.test(v.trim())) missingCells.push([r, col]);
+        return v;
+      })), missing: missingCells };
+    }
+    if (next.quiz) next.quiz = next.quiz.map((q) => ({ q: q.q, a: str(q.a) }));
+    const note = fills.notes?.[s.title];
+    if (note) next.notes = note;
+    return next;
+  });
+  return renderDeck(`${plan.concept.title} Lecture`, slides, projectDir);
+}
+
 // ─── `plum teach …` ──────────────────────────────────────────────────────────
 
 export async function runTeachCommand(argv: string[]): Promise<number> {
@@ -406,7 +541,26 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         if (!positional[0]) { console.error("Usage: plum teach brief <concept> [--lang L] [--full]"); return 1; }
         console.log(conceptBrief(positional[0], flags.lang, flags.full === "true"));
         return 0;
+      case "plan": {
+        if (!positional[0]) { console.error("Usage: plum teach plan <concept> [--lang L]"); return 1; }
+        const plan = buildPlan(positional[0], flags.lang);
+        console.log([
+          `Plan for ${plan.concept.id} (${plan.lang}): ${plan.slides.length} slides generated. Fill these slots as one JSON object,`,
+          `then: plum teach render --plan ${plan.concept.id} --lang ${plan.lang} --fill <fills.json>`,
+          ...plan.slots.map((s) => `- ${s.name}: ${s.hint}`)
+        ].join("\n"));
+        return 0;
+      }
       case "render": {
+        if (flags.plan) {
+          const fillsRaw = flags.fill ? readFileSync(flags.fill, "utf-8") : await Bun.stdin.text();
+          const plan = buildPlan(flags.plan, flags.lang);
+          const out = flags.out ?? join(PLUM_DATA_DIR, "sessions", `${plan.concept.id}-${basename(process.env.CLAUDE_PROJECT_DIR ?? process.cwd())}.html`);
+          mkdirSync(dirname(out), { recursive: true });
+          writeFileSync(out, renderPlan(flags.plan, flags.lang, JSON.parse(fillsRaw) as Fills));
+          console.log(`${out}\n${plan.slides.length} slides`);
+          return 0;
+        }
         const raw = flags.in ? readFileSync(flags.in, "utf-8") : await Bun.stdin.text();
         const slides = JSON.parse(raw) as Slide[];
         if (!Array.isArray(slides) || slides.length === 0) throw new Error("render expects a non-empty JSON array of slides");
@@ -418,7 +572,7 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         return 0;
       }
       default:
-        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | index [dir] | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
+        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | index [dir] | plan <concept> [--lang L] | render --plan <concept> --fill F | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
         return 1;
     }
   } catch (e) {

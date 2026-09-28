@@ -49,51 +49,43 @@ Never invent repo code; anything you write in their domain is labelled *illustra
 stage and test file in that language — fetched on demand. Use `--full` only if you genuinely need the narrative or
 complete code. If the code can't be fetched, the brief says so: teach from the manifest and say so on the title slide.
 
-## 4. Write the deck as JSON — one call
-
-Write a JSON array of slides to a scratch file, then render it:
+## 4. Fill the plan and render — two calls
 
 ```bash
-"$P" teach render --title "<Concept> Lecture" --in <slides.json>
+"$P" teach plan <concept-id> --lang <lang>
 ```
 
-It prints the output path (`~/.plum/sessions/<title>.html`). The renderer escapes everything and produces the
-HTML — never write HTML yourself. For any existing code (theirs or the library's), use a `ref` with a line range
-from an outline: the renderer reads, slices, escapes and attributes it (`src` is filled in for you). Write `text`
-only for the illustrative rewrite in their domain.
+Prints the slots to fill. The rest of the deck — title, idea and diagram, one slide per stage with the library's
+code, trade-offs, misconceptions, quiz questions, the canonical run command — is generated from the concept, so you
+don't write it. Write only the slots as one small JSON object to a scratch file, then render:
 
-Slide fields (all optional except `kind` and `title`; inline text supports `` `code` `` and `**bold**`):
+```bash
+"$P" teach render --plan <concept-id> --lang <lang> --fill <fills.json>
+```
 
 ```json
 {
-  "kind": "title | question | problem | idea | diagram | binding | before | after | compare | tradeoff | quiz | exercise | recap",
-  "title": "…", "eyebrow": "…", "lede": "…", "meta": "…",
-  "text": ["paragraph", "…"], "bullets": ["…"],
-  "code": { "ref": "repo:<path>" | "example:<concept>/<lang>/<file>", "lines": "12-30" },
-  "code": { "lang": "ts", "text": "only for code you write yourself (the illustrative rewrite)" },
-  "cols": [ { "tag": "before | after | yours", "label": "…", "code": { … }, "bullets": ["…"] } ],
-  "table": { "headers": ["Role", "Meaning", "Yours"], "rows": [["…", "…", "…"]], "missing": [[row, col]] },
-  "diagram": "plain-text diagram", "mermaid": "graph LR; A-->B",
-  "quiz": [ { "q": "…", "a": "…" } ],
-  "notes": "speaker notes"
+  "meta": "Bound to: shop-api · TypeScript · NestJS + Prisma · ~20 min",
+  "question": "If the second save in cancelMany fails, what's left in the database?",
+  "problem": { "ref": "repo:src/orders/orders.service.ts", "lines": "40-58" },
+  "problemText": "Each save commits on its own, so a failure halfway leaves partial state.",
+  "bindings": { "<each role from the plan>": "`TheirType` (src/…)" , "<a role they lack>": "missing" },
+  "yours": { "lang": "ts", "text": "await this.prisma.$transaction(async (tx) => { … })" },
+  "answers": ["one per quiz question, pointing at their code"],
+  "exercise": ["Wrap cancelMany in src/orders/orders.service.ts in one transaction"],
+  "recap": ["…", "…", "…"],
+  "notes": { "<slide title>": "optional speaker notes" }
 }
 ```
 
-Arc (12–18 slides; drop what doesn't apply, never pad):
+Every slot is required (`problem` may be `null` to reuse the canonical before), `bindings` needs every role the plan
+lists, and `answers` one entry per quiz question — the renderer says what's missing. Use a `ref` with a line range
+from an outline for any existing code; write `text` only for the illustrative rewrite. The output path is printed
+(`~/.plum/sessions/<concept>-<repo>.html`).
 
-1. **title** — concept, one-line thesis, `meta`: "Bound to: <repo> · <language> · <framework> · ~N min".
-2. **question** — a *predict-first* prompt about their code ("How many files change if…?").
-3. **problem** — the pain, shown with a real excerpt from their repo (`code.src` = its path) or the canonical before.
-4. **idea** — 3 bullets + the diagram from the narrative.
-5. **binding** — `table`: canonical role → meaning → *their* type/file; mark absent roles in `missing`.
-6. **before** / **after** / **compare** — one per manifest stage, canonical code from the brief (trim to what matters;
-   keep lines under ~60 characters in `cols`).
-7. **compare** — the after stage rewritten in *their* domain and idioms, `tag: "yours"`, labelled illustrative.
-8. **tradeoff** — when not to, costs, what it doesn't solve.
-9. **idea** — common misconceptions.
-10. **quiz** — the manifest's checks, answers referencing their code.
-11. **exercise** — one concrete change in *their* repo (file paths), and the canonical example's run command.
-12. **recap** — three takeaways; revisit the opening prediction.
+For a custom deck instead of the plan, `"$P" teach render --title "<Concept> Lecture" --in <slides.json>` takes a
+JSON array of slides (`kind`, `title`, `eyebrow`, `lede`, `meta`, `text[]`, `bullets[]`, `code`, `cols[]`,
+`table`, `diagram`, `quiz[]`, `notes`) — only when the plan genuinely doesn't fit.
 
 ## 5. Publish
 

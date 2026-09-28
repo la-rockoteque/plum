@@ -183,3 +183,68 @@ test("brief defaults to essentials plus outlines; --full adds narrative and code
   expect(full).toContain("```go");
   expect(lean.length).toBeLessThan(full.length / 2);
 });
+
+// ── reusable slide plans ─────────────────────────────────────────────────────
+
+import { buildPlan, renderPlan } from "./teach.js";
+
+const fills = {
+  meta: "Bound to: shop · TypeScript · NestJS · ~20 min",
+  question: "If a second save fails, what is left in the database?",
+  problem: { ref: "example:unit-of-work/typescript/src/orm/repository.ts", lines: "1-10" },
+  problemText: "Each save commits on its own.",
+  bindings: { "batch cancellation": "`CancelOrdersHandler`", "flush": "missing" },
+  yours: { lang: "ts", text: "await prisma.$transaction(async (tx) => { /* … */ });" },
+  answers: ["a1", "a2", "a3", "a4"],
+  exercise: ["Wrap `cancelMany` in one transaction."],
+  recap: ["one", "two", "three"]
+};
+
+test("a plan lists only the repo-specific slots, and generated slides come from the manifest", () => {
+  const plan = buildPlan("unit-of-work", "typescript");
+  expect(plan.slots.map((s) => s.name)).toEqual(["meta", "question", "problem", "problemText", "bindings", "yours", "answers", "exercise", "recap"]);
+  expect(plan.slots.find((s) => s.name === "answers")?.hint).toContain("4");
+  const kinds = plan.slides.map((s) => s.kind);
+  expect(kinds[0]).toBe("title");
+  expect(kinds).toContain("quiz");
+  expect(plan.slides.some((s) => s.cols?.some((c) => c.code?.ref?.startsWith("example:unit-of-work/typescript/")))).toBe(true);
+});
+
+test("render --plan merges fills into the generated deck", () => {
+  const roles = Object.keys(buildPlan("unit-of-work", "typescript").concept.roles);
+  const bindings = Object.fromEntries(roles.map((r, i) => [r, i === 0 ? "`CancelOrdersHandler`" : i === 1 ? "missing" : "`x`"]));
+  const html = renderPlan("unit-of-work", "typescript", { ...fills, bindings });
+  expect(html).toContain("<title>Unit of Work Lecture</title>");
+  expect(html).toContain("If a second save fails");
+  expect(html).toContain("<code>CancelOrdersHandler</code>");
+  expect(html).toContain('<td class="missing">missing</td>');
+  expect(html).toContain("prisma.$transaction");
+  expect(html).toContain("<p>a3</p>");
+  expect(html.match(/<section class="slide"/g)!.length).toBeGreaterThanOrEqual(10);
+});
+
+test("render --plan refuses missing slots and names them", () => {
+  const { answers: _a, question: _q, ...partial } = fills;
+  expect(() => renderPlan("unit-of-work", "typescript", partial)).toThrow(/question.*answers|answers.*question/);
+});
+
+test("`plum teach plan` prints slots compactly", () => {
+  const out = Bun.spawnSync(["bun", CLI, "teach", "plan", "unit-of-work", "--lang", "typescript"]).stdout.toString();
+  expect(out).toContain("bindings");
+  expect(out.length).toBeLessThan(2500);
+});
+
+test("every concept in the library produces a plan that renders", () => {
+  for (const c of loadConcepts()) {
+    for (const lang of Object.keys(c.examples)) {
+      const plan = buildPlan(c.id, lang);
+      const html = renderPlan(c.id, lang, {
+        meta: "m", question: "q", problem: null, problemText: "p",
+        bindings: Object.fromEntries(Object.keys(c.roles).map((r) => [r, "x"])),
+        yours: { lang: "ts", text: "x" }, answers: c.checks.map(() => "a"), exercise: ["e"], recap: ["r1", "r2", "r3"]
+      });
+      expect({ id: c.id, lang, ok: html.includes("</section>") && !/\{\{(meta|question|problem|problemText|bindings|yours|answers|exercise|recap)/.test(html) }).toEqual({ id: c.id, lang, ok: true });
+      expect(plan.slides.length).toBeGreaterThanOrEqual(9);
+    }
+  }
+});
