@@ -1,0 +1,119 @@
+{
+  "id": "aggregates",
+  "title": "Aggregates and consistency boundaries",
+  "category": "architecture",
+  "domain": "architecture",
+  "level": "intermediate",
+  "summary": "An aggregate is a cluster of objects saved as one unit behind a single root that is the only path in for any change, so an invariant spanning several objects can never be broken from outside.",
+  "prerequisites": [
+    "value-objects-entities",
+    "repository"
+  ],
+  "related": [
+    "unit-of-work"
+  ],
+  "signals": [
+    "a child entity (a line, an item, a slot) with its own repository or collection that callers query and update directly",
+    "a cached total, count or summary field that a rule spanning several child rows is supposed to keep correct, updated only when a caller remembers to",
+    "a collection getter that returns the live internal list or map, so callers can append, remove or mutate its elements directly",
+    "an invariant that spans more than one row (max count, sum, cross-field state) enforced nowhere, or re-checked separately in every caller"
+  ],
+  "roles": {
+    "Order (before)": "a header row: identity plus a cached total, no say over its lines",
+    "OrderLine (before)": "a child entity with its own repository — reachable and mutable from anywhere",
+    "Order (after)": "aggregate root: the only entry point for reading or changing a line",
+    "OrderLine (after)": "held inside the aggregate; only copies of it ever leave",
+    "OrderRepository (after)": "one repository per aggregate — saves and loads the whole Order, never a line by itself"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "A child entity with its own repository",
+      "idea": "OrderLine has its own repository, so a caller can add an 11th line, zero out a quantity, or edit a line on a cancelled order without the Order ever finding out — and its cached total goes stale."
+    },
+    {
+      "id": "after",
+      "title": "Order as the aggregate root",
+      "idea": "Order is the only entry point (addLine, changeQuantity, removeLine, cancel); lines are never reachable for mutation from outside; one repository saves and loads the whole aggregate; the total is always derived, never cached."
+    }
+  ],
+  "checks": [
+    "Why does putting a repository on OrderLine make it possible to break a rule that spans several lines, like \"at most 10 lines\"?",
+    "Why does the aggregate return copies of its lines instead of the live objects it holds internally?",
+    "What single property must be true of every write that goes through Order, no matter which method is called?",
+    "Why is 'one repository per aggregate' a consequence of the boundary, not an arbitrary rule?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/aggregates/before.py"
+        ],
+        "after": [
+          "src/aggregates/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_aggregates.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_aggregates.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/aggregates/before.ts"
+        ],
+        "after": [
+          "src/aggregates/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/aggregates.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/aggregates.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "aggregates/before/order.go"
+        ],
+        "after": [
+          "aggregates/after/order.go"
+        ]
+      },
+      "tests": [
+        "aggregates/before/order_test.go",
+        "aggregates/after/order_test.go"
+      ],
+      "run": "go test ./aggregates/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/Aggregates/Before/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/Aggregates/After/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/AggregatesTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.AggregatesTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/aggregates/before/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/aggregates/after/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/AggregatesTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.AggregatesTest'"
+    }
+  }
+}
