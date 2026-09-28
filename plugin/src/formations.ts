@@ -16,11 +16,11 @@ export interface Formation {
   repoUrl: string;
   ref: string;
   root: string;                        // the curriculum folder, relative to the repo
-  languages: string[];
+  languages?: string[];                // one starter per language under project/<lang>/; absent = a single project/
   modules: Record<string, string[]>;   // module id → Plum concept ids
 }
 
-export interface FormationMatch { id: string; title: string; module: string; languages: string[] }
+export interface FormationMatch { id: string; title: string; module: string; languages?: string[] }
 
 export function loadFormations(): Record<string, Formation> {
   const path = join(LIBRARY_DIR, "formations.json");
@@ -34,18 +34,20 @@ export function matchFormations(concept: string, formations = loadFormations()):
 }
 
 // Non-cone sparse patterns: what a learner's copy needs, never solutions/.
-export function sparsePatterns(f: Formation, lang: string): string[] {
+export function sparsePatterns(f: Formation, lang?: string): string[] {
   const root = `/${f.root}`;
   return ["/CLAUDE.md", "/.claude/settings.json", "/.claude/skills/", "/learner/.gitkeep",
-    `${root}/curriculum.md`, `${root}/modules/`, `${root}/questions/`, `${root}/docs/`, `${root}/project/${lang}/`];
+    `${root}/curriculum.md`, `${root}/modules/`, `${root}/questions/`, `${root}/docs/`, lang ? `${root}/project/${lang}/` : `${root}/project/`];
 }
 
 export function fetchFormation(id: string, lang: string | undefined, dirArg?: string): string {
   const f = loadFormations()[id];
   if (!f) throw new Error(`Unknown formation "${id}". Run \`plum formations\` to list them.`);
-  const chosen = lang ?? f.languages[0];
-  if (!f.languages.includes(chosen)) throw new Error(`${id} has no ${chosen} starter (available: ${f.languages.join(", ")}).`);
-  if (!isSafeSegment(id) || !isSafeSegment(chosen) || !isSafeRelativePath(f.root)) throw new Error(`Invalid entry for ${id} in formations.json.`);
+  const langs = f.languages ?? [];
+  if (langs.length === 0 && lang) throw new Error(`${id} has a single starter; drop --lang.`);
+  const chosen = lang ?? langs[0];
+  if (chosen && !langs.includes(chosen)) throw new Error(`${id} has no ${chosen} starter (available: ${langs.join(", ")}).`);
+  if (!isSafeSegment(id) || (chosen && !isSafeSegment(chosen)) || !isSafeRelativePath(f.root)) throw new Error(`Invalid entry for ${id} in formations.json.`);
   if (!isSafeRepoUrl(f.repoUrl)) throw new Error(`Refusing to fetch from ${JSON.stringify(f.repoUrl)}.`);
   if (!isSafeRef(f.ref)) throw new Error(`Refusing to fetch ref ${JSON.stringify(f.ref)}.`);
 
@@ -67,6 +69,8 @@ export function fetchFormation(id: string, lang: string | undefined, dirArg?: st
   return dest;
 }
 
+const langList = (langs?: string[]) => langs?.length ? ` (${langs.join(", ")})` : "";
+
 export function runFormationsCommand(argv: string[]): number {
   const [sub = "list", ...rest] = argv;
   const flags = parseFlags(rest);
@@ -75,15 +79,15 @@ export function runFormationsCommand(argv: string[]): number {
     switch (sub) {
       case "list":
         for (const [id, f] of Object.entries(loadFormations())) {
-          console.log(`${id} — ${f.title} (${f.languages.join(", ")})`);
+          console.log(`${id} — ${f.title}${langList(f.languages)}`);
           for (const [m, cs] of Object.entries(f.modules)) console.log(`  ${m.padEnd(26)} ${cs.join(", ")}`);
         }
         return 0;
       case "match": {
         if (!arg) { console.error("Usage: plum formations match <concept>"); return 1; }
         for (const m of matchFormations(arg)) {
-          console.log(`${m.id} ${m.module} — ${m.title} (${m.languages.join(", ")})`);
-          console.log(`  fetch: plum formations fetch ${m.id} --lang <language>, then /start in that folder`);
+          console.log(`${m.id} ${m.module} — ${m.title}${langList(m.languages)}`);
+          console.log(`  fetch: plum formations fetch ${m.id}${m.languages?.length ? " --lang <language>" : ""}, then /start in that folder`);
         }
         return 0;
       }

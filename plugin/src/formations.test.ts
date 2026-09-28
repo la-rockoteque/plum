@@ -3,7 +3,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { matchFormations, type Formation } from "./formations.js";
+import { matchFormations, sparsePatterns, type Formation } from "./formations.js";
 
 const formation = (repoUrl: string, ref: string): Formation => ({
   title: "Formation Architecture backend", repoUrl, ref, root: "curricula/architecture-backend",
@@ -85,4 +85,11 @@ test("fetch rejects a language the formation has no starter for", () => {
   expect(r.code).toBe(1);
   expect(r.out).toContain("available: python, go");
   expect(existsSync(join(home, "k"))).toBe(false);
+});
+
+test("a formation with a single starter fetches the whole project/, still without solutions", () => {
+  const f = formation("/r", "main");
+  const single: Formation = { title: f.title, repoUrl: f.repoUrl, ref: f.ref, root: f.root, modules: f.modules };
+  expect(sparsePatterns(single)).toContain("/curricula/architecture-backend/project/");
+  expect(sparsePatterns(single).some((p) => p.includes("solutions"))).toBe(false);
 });
