@@ -1,22 +1,26 @@
 namespace RepositoryExample.TestDoubles.After;
 
-public sealed class Order(string id, string customerEmail, decimal cancellationFee)
+public enum OrderStatus { Pending, Shipped, Cancelled }
+
+public enum ChargeResult { Approved, Declined }
+
+public sealed class Order(int id, string customerEmail, int amountMinor)
 {
-    public string Id { get; } = id;
+    public int Id { get; } = id;
     public string CustomerEmail { get; } = customerEmail;
-    public decimal CancellationFee { get; } = cancellationFee;
-    public string Status { get; set; } = "placed";
+    public int AmountMinor { get; } = amountMinor;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
 }
 
 public interface IOrderRepository
 {
-    Order FindById(string orderId);
+    Order Get(int orderId);
     void Save(Order order);
 }
 
 public interface IPaymentGateway
 {
-    void Charge(string orderId, decimal amount);
+    ChargeResult Charge(int orderId, int amountMinor);
 }
 
 public interface IMailer
@@ -34,13 +38,21 @@ public sealed class CancelOrder(
     IOrderRepository orders,
     IPaymentGateway gateway,
     IMailer mailer,
-    IAuditLogger auditLogger) // never called: a dummy satisfies this parameter in tests
+    IAuditLogger auditLogger)
 {
-    public void Execute(string orderId)
+    public void Execute(int orderId)
     {
-        var order = orders.FindById(orderId);
-        gateway.Charge(order.Id, order.CancellationFee);
-        order.Status = "cancelled";
+        var order = orders.Get(orderId);
+        var result = gateway.Charge(order.Id, order.AmountMinor);
+        if (result == ChargeResult.Declined)
+        {
+            // A declined charge is a legitimate business outcome, not a crash: the audit
+            // logger is a real collaborator on this path, even though the happy path
+            // never touches it.
+            auditLogger.Log($"charge declined for order {order.Id}");
+            return;
+        }
+        order.Status = OrderStatus.Cancelled;
         mailer.Send(order.CustomerEmail, $"Your order {order.Id} was cancelled");
         orders.Save(order);
     }

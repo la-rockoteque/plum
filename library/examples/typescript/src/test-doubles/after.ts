@@ -1,23 +1,25 @@
+export type ChargeResult = "approved" | "declined";
+
 export class Order {
   status: string;
 
   constructor(
-    public readonly id: string,
+    public readonly id: number,
     public readonly customerEmail: string,
-    public readonly cancellationFee: number,
-    status = "placed",
+    public readonly amountMinor: number,
+    status = "pending",
   ) {
     this.status = status;
   }
 }
 
 export interface OrderRepository {
-  findById(orderId: string): Order;
+  get(orderId: number): Order;
   save(order: Order): void;
 }
 
 export interface PaymentGateway {
-  charge(orderId: string, amount: number): void;
+  charge(orderId: number, amountMinor: number): ChargeResult;
 }
 
 export interface Mailer {
@@ -34,13 +36,19 @@ export class CancelOrder {
     private readonly orders: OrderRepository,
     private readonly gateway: PaymentGateway,
     private readonly mailer: Mailer,
-    // never called here: a dummy satisfies this parameter in tests
     private readonly auditLogger: AuditLogger,
   ) {}
 
-  execute(orderId: string): void {
-    const order = this.orders.findById(orderId);
-    this.gateway.charge(order.id, order.cancellationFee);
+  execute(orderId: number): void {
+    const order = this.orders.get(orderId);
+    const result = this.gateway.charge(order.id, order.amountMinor);
+    if (result === "declined") {
+      // A declined charge is a legitimate business outcome, not a crash: the audit
+      // logger is a real collaborator on this path, even though the happy path never
+      // touches it.
+      this.auditLogger.log(`charge declined for order ${order.id}`);
+      return;
+    }
     order.status = "cancelled";
     this.mailer.send(order.customerEmail, `Your order ${order.id} was cancelled`);
     this.orders.save(order);

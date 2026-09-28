@@ -1,21 +1,34 @@
+from dataclasses import dataclass
+from enum import Enum
 from typing import Protocol
 
 
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    CANCELLED = "cancelled"
+
+
+class ChargeResult(str, Enum):
+    APPROVED = "approved"
+    DECLINED = "declined"
+
+
+@dataclass
 class Order:
-    def __init__(self, order_id: str, customer_email: str, cancellation_fee: float, status: str = "placed") -> None:
-        self.id = order_id
-        self.customer_email = customer_email
-        self.cancellation_fee = cancellation_fee
-        self.status = status
+    id: int
+    customer_email: str
+    amount_minor: int
+    status: OrderStatus = OrderStatus.PENDING
 
 
 class OrderRepository(Protocol):
-    def find_by_id(self, order_id: str) -> Order: ...
+    def get(self, order_id: int) -> Order: ...
     def save(self, order: Order) -> None: ...
 
 
 class PaymentGateway(Protocol):
-    def charge(self, order_id: str, amount: float) -> None: ...
+    def charge(self, order_id: int, amount_minor: int) -> ChargeResult: ...
 
 
 class Mailer(Protocol):
@@ -33,11 +46,17 @@ class CancelOrder:
         self.orders = orders
         self.gateway = gateway
         self.mailer = mailer
-        self.audit_logger = audit_logger  # never called here: a dummy satisfies this parameter in tests
+        self.audit_logger = audit_logger
 
-    def execute(self, order_id: str) -> None:
-        order = self.orders.find_by_id(order_id)
-        self.gateway.charge(order.id, order.cancellation_fee)
-        order.status = "cancelled"
+    def execute(self, order_id: int) -> None:
+        order = self.orders.get(order_id)
+        result = self.gateway.charge(order.id, order.amount_minor)
+        if result is ChargeResult.DECLINED:
+            # A declined charge is a legitimate business outcome, not a crash: the audit
+            # logger is a real collaborator on this path, even though the happy path
+            # never touches it.
+            self.audit_logger.log(f"charge declined for order {order.id}")
+            return
+        order.status = OrderStatus.CANCELLED
         self.mailer.send(order.customer_email, f"Your order {order.id} was cancelled")
         self.orders.save(order)

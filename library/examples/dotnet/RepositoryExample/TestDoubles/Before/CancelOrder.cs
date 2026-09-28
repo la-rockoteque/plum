@@ -9,15 +9,15 @@ public sealed class SmtpMailer
 // Stand-in for a real payment-gateway HTTP client.
 public sealed class HttpPaymentGateway
 {
-    public void Charge(string orderId, decimal amount) => throw new InvalidOperationException("network unavailable");
+    public void Charge(int orderId, int amountMinor) => throw new InvalidOperationException("network unavailable");
 }
 
-public sealed class Order(string id, string customerEmail, decimal cancellationFee)
+public sealed class Order(int id, string customerEmail, int amountMinor)
 {
-    public string Id { get; } = id;
+    public int Id { get; } = id;
     public string CustomerEmail { get; } = customerEmail;
-    public decimal CancellationFee { get; } = cancellationFee;
-    public string Status { get; set; } = "placed";
+    public int AmountMinor { get; } = amountMinor;
+    public string Status { get; set; } = "pending";
 }
 
 // Self-constructs its collaborators: no test can observe anything but the crash.
@@ -28,7 +28,7 @@ public sealed class CancelOrder
 
     public void Execute(Order order)
     {
-        _gateway.Charge(order.Id, order.CancellationFee);
+        _gateway.Charge(order.Id, order.AmountMinor);
         order.Status = "cancelled";
         _mailer.Send(order.CustomerEmail, $"Your order {order.Id} was cancelled");
     }

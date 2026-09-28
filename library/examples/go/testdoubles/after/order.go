@@ -2,24 +2,41 @@
 // double or adapter plugs in.
 package after
 
+import "fmt"
+
+type OrderStatus string
+
+const (
+	StatusPending   OrderStatus = "pending"
+	StatusShipped   OrderStatus = "shipped"
+	StatusCancelled OrderStatus = "cancelled"
+)
+
+type ChargeResult string
+
+const (
+	ChargeApproved ChargeResult = "approved"
+	ChargeDeclined ChargeResult = "declined"
+)
+
 type Order struct {
-	ID              string
-	CustomerEmail   string
-	CancellationFee float64
-	Status          string
+	ID            int
+	CustomerEmail string
+	AmountMinor   int
+	Status        OrderStatus
 }
 
-func NewOrder(id, customerEmail string, cancellationFee float64) *Order {
-	return &Order{ID: id, CustomerEmail: customerEmail, CancellationFee: cancellationFee, Status: "placed"}
+func NewOrder(id int, customerEmail string, amountMinor int) *Order {
+	return &Order{ID: id, CustomerEmail: customerEmail, AmountMinor: amountMinor, Status: StatusPending}
 }
 
 type OrderRepository interface {
-	FindByID(orderID string) (*Order, error)
+	Get(orderID int) (*Order, error)
 	Save(order *Order) error
 }
 
 type PaymentGateway interface {
-	Charge(orderID string, amount float64) error
+	Charge(orderID int, amountMinor int) (ChargeResult, error)
 }
 
 type Mailer interface {
@@ -34,19 +51,26 @@ type CancelOrder struct {
 	Orders      OrderRepository
 	Gateway     PaymentGateway
 	Mailer      Mailer
-	AuditLogger AuditLogger // never called: a dummy satisfies this field in tests
+	AuditLogger AuditLogger
 }
 
-func (c CancelOrder) Execute(orderID string) error {
-	order, err := c.Orders.FindByID(orderID)
+func (c CancelOrder) Execute(orderID int) error {
+	order, err := c.Orders.Get(orderID)
 	if err != nil {
 		return err
 	}
-	if err := c.Gateway.Charge(order.ID, order.CancellationFee); err != nil {
+	result, err := c.Gateway.Charge(order.ID, order.AmountMinor)
+	if err != nil {
 		return err
 	}
-	order.Status = "cancelled"
-	if err := c.Mailer.Send(order.CustomerEmail, "Your order "+order.ID+" was cancelled"); err != nil {
+	if result == ChargeDeclined {
+		// A declined charge is a legitimate business outcome, not a crash: the audit
+		// logger is a real collaborator on this path, even though the happy path never
+		// touches it.
+		return c.AuditLogger.Log(fmt.Sprintf("charge declined for order %d", order.ID))
+	}
+	order.Status = StatusCancelled
+	if err := c.Mailer.Send(order.CustomerEmail, fmt.Sprintf("Your order %d was cancelled", order.ID)); err != nil {
 		return err
 	}
 	return c.Orders.Save(order)

@@ -9,13 +9,13 @@ class SmtpMailer {
 
 // Stand-in for a real payment-gateway HTTP client.
 class HttpPaymentGateway {
-    fun charge(orderId: String, amount: Double) {
+    fun charge(orderId: Int, amountMinor: Int) {
         error("network unavailable")
     }
 }
 
-class Order(val id: String, val customerEmail: String, val cancellationFee: Double) {
-    var status: String = "placed"
+class Order(val id: Int, val customerEmail: String, val amountMinor: Int) {
+    var status: String = "pending"
 }
 
 // Self-constructs its collaborators: no test can observe anything but the crash.
@@ -24,7 +24,7 @@ class CancelOrder {
     private val mailer = SmtpMailer()
 
     fun execute(order: Order) {
-        gateway.charge(order.id, order.cancellationFee)
+        gateway.charge(order.id, order.amountMinor)
         order.status = "cancelled"
         mailer.send(order.customerEmail, "Your order ${order.id} was cancelled")
     }

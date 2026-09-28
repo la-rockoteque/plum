@@ -7,7 +7,7 @@ export class SmtpMailer {
 
 // Stand-in for a real payment-gateway HTTP client.
 export class HttpPaymentGateway {
-  charge(_orderId: string, _amount: number): void {
+  charge(_orderId: number, _amountMinor: number): void {
     throw new Error("network unavailable");
   }
 }
@@ -16,10 +16,10 @@ export class Order {
   status: string;
 
   constructor(
-    public readonly id: string,
+    public readonly id: number,
     public readonly customerEmail: string,
-    public readonly cancellationFee: number,
-    status = "placed",
+    public readonly amountMinor: number,
+    status = "pending",
   ) {
     this.status = status;
   }
@@ -31,7 +31,7 @@ export class CancelOrder {
   private readonly mailer = new SmtpMailer();
 
   execute(order: Order): void {
-    this.gateway.charge(order.id, order.cancellationFee);
+    this.gateway.charge(order.id, order.amountMinor);
     order.status = "cancelled";
     this.mailer.send(order.customerEmail, `Your order ${order.id} was cancelled`);
   }

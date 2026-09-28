@@ -20,15 +20,16 @@
   ],
   "roles": {
     "CancelOrder": "use case under test",
-    "OrderRepository": "port the use case depends on for persistence",
-    "InMemoryOrderRepository": "fake: real behaviour, no external system",
-    "PaymentGateway": "port for an external, side-effecting collaborator",
-    "StubPaymentGateway": "stub: a canned response, no assertions made on it",
+    "OrderRepository": "port the use case depends on for persistence (get / save)",
+    "InMemoryOrderRepository": "fake: real behaviour, no external system — copies on both save and get",
+    "PaymentGateway": "port for an external, side-effecting collaborator; charge answers approved or declined",
+    "StubPaymentGateway": "stub: a canned charge result, no assertions made on it",
     "MockPaymentGateway": "mock: a hand-rolled expectation, behaviour verification",
     "Mailer": "port for a fire-and-forget side effect",
     "SpyMailer": "spy: records calls for the test to assert afterwards, state verification",
-    "AuditLogger": "port unrelated to the outcome this test cares about",
-    "NullAuditLogger": "dummy: satisfies the constructor, never invoked"
+    "AuditLogger": "port for the side effect of a declined charge",
+    "NullAuditLogger": "dummy: satisfies the constructor in happy-path tests, never invoked",
+    "SpyAuditLogger": "spy: records the declined-charge message once the audit logger becomes a real collaborator"
   },
   "stages": [
     {
@@ -39,7 +40,7 @@
     {
       "id": "after",
       "title": "After",
-      "idea": "Every collaborator is injected behind a port. The tests plug in a dummy, a stub, a spy, a mock and a fake — one per role — and name each for what it is."
+      "idea": "Every collaborator is injected behind a port. The tests plug in a dummy, a stub, a spy, a mock and a fake — one per role — and name each for what it is. The stub's canned decline drives a branch where the order stays uncancelled and the audit logger, otherwise a dummy, becomes a real collaborator."
     }
   ],
   "checks": [

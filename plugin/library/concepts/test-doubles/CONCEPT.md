@@ -28,15 +28,18 @@ particular collaborator:
 
 ```text
 CancelOrder
-  ├─ OrderRepository  ──► fake   (in-memory, real find/save behaviour)
-  ├─ PaymentGateway   ──► stub   (canned "charged", nothing asserted on it)
+  ├─ OrderRepository  ──► fake   (in-memory, real get/save round-trip)
+  ├─ PaymentGateway   ──► stub   (canned "declined", drives the audit-log branch)
   │                   ──► mock   (fails on the wrong order id or amount)
   ├─ Mailer           ──► spy    (records the message; assert after)
-  └─ AuditLogger      ──► dummy  (never called)
+  └─ AuditLogger      ──► dummy  (happy path: never called)
+                       ──► spy   (decline path: records the message)
 ```
 
 The same port (`PaymentGateway`) can be filled by a stub in one test and a mock in another — the choice isn't a
-property of the port, it's a property of what that test needs to prove.
+property of the port, it's a property of what that test needs to prove. `AuditLogger` makes the same point from
+the other side: it's a dummy in every test where the charge is approved, and only earns a real (spy) double in
+the one test that drives it.
 
 ## Roles — find them in any codebase
 
@@ -44,11 +47,11 @@ property of the port, it's a property of what that test needs to prove.
 |---|---|---|
 | Use case under test | `CancelOrder` | The unit whose business outcome the test cares about |
 | Port | `PaymentGateway`, `Mailer`, `OrderRepository` | An interface the use case depends on, not a concrete client |
-| Dummy | `NullAuditLogger` | A parameter or field the test never asserts on and the code never calls |
-| Stub | `StubPaymentGateway` | A canned return value; no recorded calls, no expectations |
-| Spy | `SpyMailer` | A list or counter the test reads *after* the call, to assert state |
+| Dummy | `NullAuditLogger` | A parameter or field a *particular* test never asserts on and the code never calls on that path |
+| Stub | `StubPaymentGateway` | A canned return value; no recorded calls, no expectations — but the canned value can still drive a branch |
+| Spy | `SpyMailer`, `SpyAuditLogger` | A list or counter the test reads *after* the call, to assert state |
 | Mock | `MockPaymentGateway` | A double holding an expected call that raises/fails on mismatch |
-| Fake | `InMemoryOrderRepository` | A real, working implementation over an in-memory structure |
+| Fake | `InMemoryOrderRepository` | A real, working implementation over an in-memory structure that copies on read and write |
 
 ## Walk the stages
 
@@ -59,10 +62,12 @@ property of the port, it's a property of what that test needs to prove.
    owns its own infrastructure: the test can prove the code *runs into* its dependency, not what it does with it.
 2. **after** — every collaborator is injected as a port (see dependency-inversion: a double is only pluggable
    because there's an abstraction to plug it into). The tests now show each of the five roles, one at a time:
-   a dummy audit logger nobody calls, a stub gateway that returns a canned result so the flow can proceed, a mock
-   gateway that checks it was charged the *right* order and amount and fails otherwise, a spy mailer whose sent
-   messages are asserted after the fact, and a fake repository whose `save` then `find_by_id` round-trip proves
-   real (if in-memory) persistence behaviour.
+   a dummy audit logger nobody calls because the charge is approved, a stub gateway whose canned "declined"
+   answer drives a branch where the order is *not* cancelled and the audit logger — now a spy — records why, a
+   mock gateway that checks it was charged the *right* order and amount and fails otherwise, a spy mailer whose
+   sent messages are asserted after the fact, and a fake repository whose `save` then `get` round-trip proves
+   real (if in-memory) persistence behaviour: it copies on both ends, so mutating what `get` returned can't leak
+   into storage without going through `save`.
 
 ## Trade-offs / when not to
 

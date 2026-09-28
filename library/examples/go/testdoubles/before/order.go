@@ -2,7 +2,10 @@
 // anything but the crash.
 package before
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // SmtpMailer stands in for a real SMTP client: this library never opens a socket.
 type SmtpMailer struct{}
@@ -14,19 +17,19 @@ func (SmtpMailer) Send(to, message string) error {
 // HttpPaymentGateway stands in for a real payment-gateway HTTP client.
 type HttpPaymentGateway struct{}
 
-func (HttpPaymentGateway) Charge(orderID string, amount float64) error {
+func (HttpPaymentGateway) Charge(orderID int, amountMinor int) error {
 	return errors.New("network unavailable")
 }
 
 type Order struct {
-	ID              string
-	CustomerEmail   string
-	CancellationFee float64
-	Status          string
+	ID            int
+	CustomerEmail string
+	AmountMinor   int
+	Status        string
 }
 
-func NewOrder(id, customerEmail string, cancellationFee float64) *Order {
-	return &Order{ID: id, CustomerEmail: customerEmail, CancellationFee: cancellationFee, Status: "placed"}
+func NewOrder(id int, customerEmail string, amountMinor int) *Order {
+	return &Order{ID: id, CustomerEmail: customerEmail, AmountMinor: amountMinor, Status: "pending"}
 }
 
 type CancelOrder struct {
@@ -35,9 +38,9 @@ type CancelOrder struct {
 }
 
 func (c CancelOrder) Execute(order *Order) error {
-	if err := c.gateway.Charge(order.ID, order.CancellationFee); err != nil {
+	if err := c.gateway.Charge(order.ID, order.AmountMinor); err != nil {
 		return err
 	}
 	order.Status = "cancelled"
-	return c.mailer.Send(order.CustomerEmail, "Your order "+order.ID+" was cancelled")
+	return c.mailer.Send(order.CustomerEmail, fmt.Sprintf("Your order %d was cancelled", order.ID))
 }
