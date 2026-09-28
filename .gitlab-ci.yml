@@ -3,6 +3,10 @@
 
 stages: [test]
 
+# Run on Nexapp's shared instance runners.
+default:
+  tags: [nexapp]
+
 plum:
   image: oven/bun:1
   script:
