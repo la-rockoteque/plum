@@ -1,0 +1,120 @@
+{
+  "id": "tell-dont-ask",
+  "title": "Tell, Don't Ask",
+  "category": "principles",
+  "domain": "implementation",
+  "level": "intermediate",
+  "summary": "A caller that reads an object's state, decides in its own if, and writes the state back should instead tell the object what it wants and let it enforce its own rule.",
+  "prerequisites": [
+    "law-of-demeter"
+  ],
+  "related": [
+    "coupling-cohesion",
+    "value-objects-entities",
+    "cqrs"
+  ],
+  "signals": [
+    "a getter read immediately followed by an if/else that branches on it and then writes a different field back",
+    "the same status check and field update duplicated across an API handler, a background job and an admin script",
+    "a bug where one caller forgot to set a field another caller always sets after the same kind of change",
+    "a state transition (cancel, approve, close) that succeeds from one call site and should not, because nothing centrally rejects it"
+  ],
+  "roles": {
+    "Order": "anemic data holder before the fix; the aggregate that owns the cancellation rule after it",
+    "ApiCancelHandler": "customer-facing caller; got the rule right, but only because it remembered every step",
+    "NightlyCancelJob": "background caller that forgot to set the refund — the inconsistency the anemic model invites",
+    "AdminCancelTool": "caller that never re-checked the order's status, so it let an invalid transition through",
+    "cancel(clock)": "the single command every caller sends after the fix; owns the check, the timestamp and the refund"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Ask, decide, set back",
+      "idea": "Order exposes its status, timestamps and refund as plain mutable fields. Three callers each read the status, branch on it, and write the fields back themselves: the API handler gets it right, the nightly job forgets to set the refund, and the admin tool never checks whether the order already shipped before cancelling it."
+    },
+    {
+      "id": "after",
+      "title": "Tell the order",
+      "idea": "Order.cancel(clock) is the only way to cancel: it checks the status, records cancelledAt and computes the refund, and rejects the transition when the order already shipped. All three callers now call the same method and get the same, correct outcome."
+    }
+  ],
+  "checks": [
+    "In the before version, why do the nightly job and the admin tool end up with different bugs even though both start from the same Order fields?",
+    "Tell-don't-ask says to stop asking objects questions and telling them what to decide. Why is a query like `order.isPending()` still fine to call, and what would make that same call a violation instead?",
+    "The after version removes Order's setters instead of just adding validation inside them. Why does removing the setters, not merely validating them, close off the bug the admin tool had?",
+    "A read model or DTO in this codebase is often nothing but public fields with no behaviour. Why doesn't tell-don't-ask apply to it the way it applies to Order?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/tell_dont_ask/before.py"
+        ],
+        "after": [
+          "src/tell_dont_ask/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_tell_dont_ask.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_tell_dont_ask.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/tell-dont-ask/before.ts"
+        ],
+        "after": [
+          "src/tell-dont-ask/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/tell-dont-ask.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/tell-dont-ask.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "telldontask/before/order.go"
+        ],
+        "after": [
+          "telldontask/after/order.go"
+        ]
+      },
+      "tests": [
+        "telldontask/before/order_test.go",
+        "telldontask/after/order_test.go"
+      ],
+      "run": "go test ./telldontask/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/TellDontAsk/Before/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/TellDontAsk/After/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/TellDontAskTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.TellDontAskTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/telldontask/before/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/telldontask/after/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/TellDontAskTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.TellDontAskTest'"
+    }
+  }
+}
