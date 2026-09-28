@@ -32,6 +32,7 @@ import { record, recordError, runStatsCommand, type UsageData } from "./telemetr
 import { runFeedbackCommand }                         from "./feedback.js";
 import { runUpdateCheck, runUpdateCommand }           from "./update.js";
 import { runLibraryCommand }                          from "./library-cache.js";
+import { runFormationsCommand }                       from "./formations.js";
 import { skillContext, logExplanation, logIndependence } from "./coaching.js";
 import { runProgressCommand, runGoalsCommand }        from "./progress.js";
 import { runConnectorsCommand, printGoalProgress }    from "./connectors.js";
@@ -56,7 +57,7 @@ async function readStdin(): Promise<Record<string, unknown>> {
 
 async function main(): Promise<void> {
   const cfg = getConfig();
-  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "library", "teach", "update", "update-check", "help"].includes(command)) return;
+  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "library", "formations", "teach", "update", "update-check", "help"].includes(command)) return;
 
   switch (command) {
     case "pre-tool":     return handlePreTool();
@@ -76,6 +77,7 @@ async function main(): Promise<void> {
     case "feedback":     { process.exitCode = await runFeedbackCommand(process.argv.slice(3)); return; }
     case "stats":        { process.exitCode = await runStatsCommand(process.argv.slice(3)); return; }
     case "library":      { process.exitCode = runLibraryCommand(process.argv.slice(3)); return; }
+    case "formations":   { process.exitCode = runFormationsCommand(process.argv.slice(3)); return; }
     case "teach":        { process.exitCode = await runTeachCommand(process.argv.slice(3)); return; }
     case "context":      return console.log(skillContext());
     case "explained":    return userCommand(() => logExplanation(process.argv[3] ?? "", process.argv.includes("partial") ? "partial" : "full",
@@ -124,6 +126,7 @@ Plum — Professor Plum cognitive atrophy harness
     wipe          delete all data in ~/.plum/ (irreversible)
     concepts      list the concept library (--json for the full manifests)
     library       example code on demand: fetch <concept> [--lang L] | status | gc | keep | unkeep | clear
+    formations    hands-on formations: list | match <concept> | fetch <formation> [--lang L] [--dir D]
     teach         lecture helpers: match <query> | survey [dir] | brief <concept> [--lang L] |
                   render --title T [--out F] < slides.json
     feedback      build a pre-filled feedback form link (--kind feature|bug|feedback --message …
