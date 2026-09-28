@@ -1,0 +1,132 @@
+{
+  "id": "testing-through-public-api",
+  "title": "Test through the public API",
+  "category": "testing",
+  "domain": "testing",
+  "level": "intermediate",
+  "summary": "A test that pokes private helpers, fields, and a unit's own collaborator breaks on a pure refactor; a test that only drives the public operation and checks observable results survives it.",
+  "prerequisites": [
+    "test-doubles"
+  ],
+  "related": [
+    "red-green-refactor"
+  ],
+  "signals": [
+    "tests importing or reflecting into private/internal members (`_method`, reflection, `@VisibleForTesting`)",
+    "assertions on an object's private field instead of a returned value or a stored/sent side effect",
+    "a test replacing a class's own internally-constructed collaborator instead of one passed to its constructor",
+    "a rename or inline refactor that breaks tests without changing any caller-visible behaviour"
+  ],
+  "roles": {
+    "PreRefactorService": "the unit under test, before a behaviour-preserving refactor",
+    "PostRefactorService": "the same unit under test, after the refactor - identical public behaviour",
+    "cancel()": "the public operation callers actually invoke",
+    "calculateFee() / feeRate": "a private helper and field the before test reaches into directly",
+    "NotificationFormatter": "the unit's own internal collaborator, constructed by it and not injected",
+    "OrderRepository (fake)": "boundary the after tests double: observable state through a real, in-memory implementation",
+    "Notifier (spy)": "boundary the after tests double: an observable call recorded for a state assertion"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Before",
+      "idea": "Tests reach past cancel() into a private helper, a private field, and the service's own internal collaborator. Both a pre-refactor and a behaviour-preserving post-refactor implementation ship here, and a passing test proves the same internal-poking assertions no longer hold once the refactor lands."
+    },
+    {
+      "id": "after",
+      "title": "After",
+      "idea": "The same two implementations are driven only through cancel() and checked by observable results - the identical test case passes against both, because the refactor never touched the contract it exercises."
+    }
+  ],
+  "checks": [
+    "Why do the before tests pass against the pre-refactor implementation but not the post-refactor one, even though a caller can't tell the two apart?",
+    "What makes NotificationFormatter 'a collaborator the unit doesn't own' from the test's point of view, and why does replacing it directly violate 'don't mock what you don't own'?",
+    "What would have to be true about a private helper for testing it directly to be the right call instead of a smell?",
+    "Why can the exact same test function run unmodified against both PreRefactorService and PostRefactorService in the after stage?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/testing_through_public_api/pre_refactor.py",
+          "src/testing_through_public_api/post_refactor.py"
+        ],
+        "after": [
+          "src/testing_through_public_api/pre_refactor.py",
+          "src/testing_through_public_api/post_refactor.py"
+        ]
+      },
+      "tests": [
+        "tests/test_testing_through_public_api.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_testing_through_public_api.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/testing-through-public-api/pre-refactor.ts",
+          "src/testing-through-public-api/post-refactor.ts"
+        ],
+        "after": [
+          "src/testing-through-public-api/pre-refactor.ts",
+          "src/testing-through-public-api/post-refactor.ts"
+        ]
+      },
+      "tests": [
+        "tests/testing-through-public-api.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/testing-through-public-api.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "testingthroughpublicapi/service/domain.go",
+          "testingthroughpublicapi/service/pre_refactor.go",
+          "testingthroughpublicapi/service/post_refactor.go"
+        ],
+        "after": [
+          "testingthroughpublicapi/service/domain.go",
+          "testingthroughpublicapi/service/pre_refactor.go",
+          "testingthroughpublicapi/service/post_refactor.go"
+        ]
+      },
+      "tests": [
+        "testingthroughpublicapi/service/internal_test.go",
+        "testingthroughpublicapi/service/public_test.go"
+      ],
+      "run": "go test ./testingthroughpublicapi/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/TestingThroughPublicApi/PreRefactor.cs",
+          "RepositoryExample/TestingThroughPublicApi/PostRefactor.cs"
+        ],
+        "after": [
+          "RepositoryExample/TestingThroughPublicApi/PreRefactor.cs",
+          "RepositoryExample/TestingThroughPublicApi/PostRefactor.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/TestingThroughPublicApiTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.TestingThroughPublicApiTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/testingthroughpublicapi/PreRefactorService.kt",
+          "src/main/kotlin/example/testingthroughpublicapi/PostRefactorService.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/testingthroughpublicapi/PreRefactorService.kt",
+          "src/main/kotlin/example/testingthroughpublicapi/PostRefactorService.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/TestingThroughPublicApiTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.TestingThroughPublicApiTest'"
+    }
+  }
+}
