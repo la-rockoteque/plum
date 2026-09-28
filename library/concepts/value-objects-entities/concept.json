@@ -1,0 +1,116 @@
+{
+  "id": "value-objects-entities",
+  "title": "Value Objects and Entities",
+  "category": "architecture",
+  "domain": "architecture",
+  "level": "foundation",
+  "summary": "A value object is defined by its attributes and is immutable; an entity is defined by its identity and persists through change.",
+  "prerequisites": [],
+  "related": [
+    "repository"
+  ],
+  "signals": [
+    "a domain field typed as a bare string or number for something with a fixed set of legal states (status, type, kind)",
+    "a numeric amount with no attached currency or unit, or currency handled as a loose sibling field",
+    "equality that compares every field of an object that is supposed to have a durable identity",
+    "money-like arithmetic done with floats instead of integer minor units"
+  ],
+  "roles": {
+    "Order (before)": "entity smuggling business rules into primitive fields",
+    "OrderStatus": "value object: the legal states and the transitions allowed between them",
+    "Money": "value object: an immutable amount + currency, compared by value",
+    "Order (after)": "entity: identity persists across attribute changes",
+    "add_totals / Money.add": "the operation that a value object can refuse when it doesn't make sense"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Primitives",
+      "idea": "Status and money are bare string/number fields, so nothing stops an invalid status or a cross-currency sum."
+    },
+    {
+      "id": "after",
+      "title": "Value objects and an entity",
+      "idea": "OrderStatus enforces legal transitions and Money enforces same-currency arithmetic; Order keeps identity-based equality."
+    }
+  ],
+  "checks": [
+    "Why is comparing two Orders by id, not by all their fields, still correct even after the order's status changes?",
+    "Why does Money need to refuse cross-currency arithmetic instead of just adding the numbers?",
+    "What makes a type a value object rather than a primitive with the same fields?",
+    "Why do integer minor units avoid the float drift that plain floats have?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/value_objects_entities/before.py"
+        ],
+        "after": [
+          "src/value_objects_entities/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_value_objects_entities.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_value_objects_entities.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/value-objects-entities/before.ts"
+        ],
+        "after": [
+          "src/value-objects-entities/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/value-objects-entities.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/value-objects-entities.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "valueobjectsentities/before/order.go"
+        ],
+        "after": [
+          "valueobjectsentities/after/order.go"
+        ]
+      },
+      "tests": [
+        "valueobjectsentities/before/order_test.go",
+        "valueobjectsentities/after/order_test.go"
+      ],
+      "run": "go test ./valueobjectsentities/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/ValueObjectsEntities/Before/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/ValueObjectsEntities/After/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/ValueObjectsEntitiesTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.ValueObjectsEntitiesTests"
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/valueobjectsentities/before/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/valueobjectsentities/after/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/ValueObjectsEntitiesTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.ValueObjectsEntitiesTest'"
+    }
+  }
+}
