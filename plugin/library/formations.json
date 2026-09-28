@@ -1,0 +1,16 @@
+{
+  "architecture-backend": {
+    "title": "Formation Architecture backend",
+    "repoUrl": "git@git.nexapptech.com:internal/formation-frontend.git",
+    "ref": "b413f7b1de0e1a0df37657934afeb14b3b628652",
+    "root": "curricula/architecture-backend",
+    "languages": ["python", "dotnet", "typescript", "go", "kotlin"],
+    "modules": {
+      "01-repository": ["repository", "test-doubles"],
+      "02-dependency-injection": ["dependency-inversion"],
+      "03-cqrs": ["cqrs"],
+      "04-orm": ["orm"],
+      "05-unit-of-work": ["unit-of-work"]
+    }
+  }
+}

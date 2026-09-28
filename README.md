@@ -153,6 +153,7 @@ plugin/bin/plum feedback --kind feature --message "…"   # print a pre-filled f
 plugin/bin/plum stats status         # opt-in usage statistics: status | summary | verdicts | send | clear
 plugin/bin/plum update [--apply]     # check for a newer Plum now (and install it)
 plugin/bin/plum library status       # streamed example cache: fetch <concept> [--lang L] | status | gc | keep | clear
+plugin/bin/plum formations           # hands-on formations: list | match <concept> | fetch <formation> [--lang L] [--dir D]
 plugin/bin/plum teach match "…"      # lecture helpers: match | survey | brief <concept> --lang L | render --in slides.json
 plugin/bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
 ```
