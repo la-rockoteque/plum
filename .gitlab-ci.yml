@@ -1,0 +1,44 @@
+# Plum CI — the harness tests plus every runnable example in the concept library.
+# Infra concept checks (docker build, terraform plan) run locally via library/examples/infra/<id>/check.sh.
+
+stages: [test]
+
+plum:
+  image: oven/bun:1
+  script:
+    - bun install --frozen-lockfile
+    - bun test src
+    - bunx tsc --noEmit
+
+examples:python:
+  image: python:3.12-slim
+  script:
+    - cd library/examples/python
+    - python -m venv .venv
+    - .venv/bin/pip install -q 'pytest>=8' 'SQLAlchemy==2.0.53'
+    - .venv/bin/pytest -q
+
+examples:typescript:
+  image: node:22
+  script:
+    - cd library/examples/typescript
+    - npm ci
+    - npm test
+
+examples:go:
+  image: golang:1.25
+  script:
+    - cd library/examples/go
+    - go test ./...
+
+examples:dotnet:
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  script:
+    - cd library/examples/dotnet
+    - dotnet test RepositoryExample.Tests
+
+examples:kotlin:
+  image: eclipse-temurin:17-jdk
+  script:
+    - cd library/examples/kotlin
+    - ./gradlew test --no-daemon
