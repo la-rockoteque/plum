@@ -108,6 +108,20 @@ injected clock**, never the wall clock.
 No new demo entry points: the targeted test command *is* the demo. Tests are named so their output reads as the
 lesson ("before: cancelling a shipped order silently succeeds").
 
+## Shared idioms
+
+Concepts build on each other, so they speak the same small domain. Use these unless the idiom itself is the lesson
+(value-objects-entities *introduces* them; a `before` stage may deliberately use a worse shape):
+
+| Idiom | Shape |
+|---|---|
+| Order status | `OrderStatus { pending, shipped, cancelled }`; the canonical rule is "a shipped or cancelled order can't be cancelled" |
+| Money | integer minor units named `amountMinor` (plus `currency` only when currency is part of the lesson) — never floats |
+| Time | a `Clock` port with `nowMs()`; tests use `FixedClock` |
+| Ids | integers |
+| Repository port | `get(id)` → detached copy or "not found"; `save(entity)` inserts or updates and stores a copy |
+| Test doubles | named by role per the test-doubles concept: dummy, stub, spy, mock, fake. In-memory fakes copy on write *and* read |
+
 ## Stages and tests
 
 - 2 stages by default (`before`, `after`); a 3rd only when the middle step is itself the lesson.
@@ -120,6 +134,13 @@ lesson ("before: cancelling a shipped order silently succeeds").
   whose test asserts that the rule is missing. `after` tests prove the fix. Where the flaw is structural (coupling,
   change cost), tests show the consequence: a change that forces an edit in N places, a fake stuffed with unused
   methods. A "real dependency" in a before stage is simulated by a stand-in that throws "network unavailable".
+- **Tests prove the lesson.** For every claim the `after` stage makes, there is a production line whose deletion makes
+  a test fail. A test that passes with the fix removed proves nothing — check before committing.
+- **Structural flaws are shown as change cost** — N callers to edit, N places that drift, a fake that must stub
+  unused methods — never as a null dereference, panic or crash that a local check would also fix.
+- **"Behaviour stays the same" lessons** (red-green-refactor, yagni-kiss, refactorings) run *one* shared test body
+  against every stage: pytest `parametrize`, a Go table over constructors, xUnit `[Theory]`, a Kotlin loop over
+  factories, a TypeScript loop over implementations. Keep the stages' public shape identical so that's possible.
 - Same behaviour, same test cases, same names (idiomatically cased) across languages.
 - No network, no external services. In-memory fakes or SQLite (already a dependency in every project).
 - Deterministic: no sleeps, no wall-clock timing, no random seeds without fixing them.

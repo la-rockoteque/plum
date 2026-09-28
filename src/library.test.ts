@@ -56,6 +56,8 @@ for (const c of concepts) {
       expect(Object.keys(ex.stages).sort()).toEqual([...stageIds].sort());
       expect(ex.tests.length).toBeGreaterThan(0);
       expect(ex.run.trim().length).toBeGreaterThan(0);
+      // dotnet exits 0 when a filter matches nothing; the trailing "Tests." keeps one class from prefix-matching another.
+      if (lang === "dotnet" && ex.run.includes("--filter")) expect(ex.run).toMatch(/FullyQualifiedName~RepositoryExample\.Tests\.\w+Tests\.(\s|$)/);
       const files = [...Object.values(ex.stages).flat(), ...ex.tests];
       for (const f of files) {
         expect({ lang, file: f, exists: existsSync(join(LIBRARY_DIR, "examples", lang, f)) })

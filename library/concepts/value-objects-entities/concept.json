@@ -96,7 +96,7 @@
       "tests": [
         "RepositoryExample.Tests/ValueObjectsEntitiesTests.cs"
       ],
-      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.ValueObjectsEntitiesTests"
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.ValueObjectsEntitiesTests."
     },
     "kotlin": {
       "stages": {
