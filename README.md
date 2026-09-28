@@ -106,6 +106,9 @@ The plugin wires up:
 | `/plum:teach <concept>` | Lecture deck on a concept, bound to the current repo's domain and architecture |
 | `/plum:feedback <text>` | Draft feedback or a feature request, review it, then open a pre-filled form you submit yourself |
 
+**Strongly recommended:** install [code-map](docs/code-map.md) so `/plum:teach` binds concepts to your code from a
+structural graph (implementations, ORM users, callers) instead of file-name guesses — and spends fewer tokens doing it.
+
 ### Concept library
 
 `library/` holds runnable before → after examples (Python, C#, TypeScript, Go, Kotlin) for repository,
@@ -173,6 +176,9 @@ is treated as shared.
     "enabled": true,
     "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     "entryId": "entry.1018508464"      // the form's paragraph field
+  },
+  "teach": {
+    "codeMap": "auto"                  // "auto" | "required" | "off" — see docs/code-map.md
   },
   "library": {                         // example code streamed on demand (docs/library-cache.md)
     "cacheMaxMb": 25,

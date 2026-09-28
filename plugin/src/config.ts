@@ -24,6 +24,9 @@ export interface PlumConfig {
     formUrl: string;      // https Google Form "viewform" URL
     entryId: string;      // the paragraph field that receives the text, "entry.<digits>"
   };
+  teach: {
+    codeMap: "auto" | "required" | "off";   // code-map graph for precise role binding (docs/code-map.md)
+  };
   library: {
     repoUrl?: string;     // where example code is streamed from; defaults to the marketplace's git URL
     ref: string;          // used when the installed commit is unknown
@@ -67,6 +70,9 @@ export const DEFAULTS: PlumConfig = {
     formUrl: "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     entryId: "entry.1018508464"
   },
+  teach: {
+    codeMap: "auto"
+  },
   library: {
     ref: "main",
     cacheMaxMb: 25,
@@ -84,7 +90,8 @@ export const DEFAULTS: PlumConfig = {
   }
 };
 
-type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates" | "library">> & {
+type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates" | "library" | "teach">> & {
+  teach?: Partial<PlumConfig["teach"]>;
   library?: Partial<PlumConfig["library"]>;
   updates?: Partial<PlumConfig["updates"]>;
   thresholds?: Partial<PlumConfig["thresholds"]>;
@@ -113,6 +120,7 @@ export function resolveConfig({ shared: rawShared = {}, personal = {}, local = {
     domains:    { ...acc.domains,    ...l.domains },
     feedback:   { ...acc.feedback,   ...l.feedback },
     library:    { ...acc.library,    ...l.library },
+    teach:      { ...acc.teach,      ...l.teach },
     telemetry:  acc.telemetry,
     updates:    acc.updates
   }), DEFAULTS);
@@ -181,7 +189,7 @@ function mergeLayers(a: Layer, b: Layer): Layer {
   return {
     ...a, ...b,
     thresholds: { ...a.thresholds, ...b.thresholds }, domains: { ...a.domains, ...b.domains },
-    feedback: { ...a.feedback, ...b.feedback }, library: { ...a.library, ...b.library },
+    feedback: { ...a.feedback, ...b.feedback }, library: { ...a.library, ...b.library }, teach: { ...a.teach, ...b.teach },
     telemetry: { ...a.telemetry, ...b.telemetry }, updates: { ...a.updates, ...b.updates }
   };
 }

@@ -13,6 +13,7 @@ import { LIBRARY_DIR, loadConcepts, type Concept } from "./library.js";
 import { fetchConcept } from "./library-cache.js";
 import { PLUM_DATA_DIR } from "./env.js";
 import { parseFlags } from "./feedback.js";
+import { ensureGraph, graphOutline, graphSurvey, indexProject, codeMapBin, graphName, INSTALL_HINT } from "./codemap.js";
 
 // ─── match ───────────────────────────────────────────────────────────────────
 
@@ -377,13 +378,28 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
       case "survey": {
         const concept = flags.concept ? loadConcepts().find((c) => c.id === flags.concept) : undefined;
         if (flags.concept && !concept) throw new Error(`Unknown concept "${flags.concept}"`);
-        console.log(surveyRepo(positional[0] ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), concept));
+        const root = positional[0] ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+        const { status, note } = ensureGraph(root);
+        console.log([surveyRepo(root, concept), ...graphSurvey(status, root), ...(note ? ["", note] : [])].join("\n"));
         return 0;
       }
       case "outline": {
-        const root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+        const root = realpathSync(process.env.CLAUDE_PROJECT_DIR ?? process.cwd());   // /var vs /private/var on macOS
         if (positional.length === 0) { console.error("Usage: plum teach outline <file> [file …] (paths relative to the project)"); return 1; }
-        console.log(positional.map((f) => outlineFile(insideProject(root, f), root)).join("\n\n"));
+        const { status } = ensureGraph(root);
+        console.log(positional.map((f) => {
+          const abs = insideProject(root, f);
+          return graphOutline(status, root, abs) ?? outlineFile(abs, root);
+        }).join("\n\n"));
+        return 0;
+      }
+      case "index": {
+        const root = positional[0] ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+        const bin = codeMapBin();
+        if (!bin) throw new Error(`code-map isn't installed. Install it:\n${INSTALL_HINT}`);
+        const graph = graphName(root);
+        const r = indexProject(root, bin, graph);
+        console.log(`[Plum] Indexed ${root} into code-map graph "${graph}" (${r.files} files, ${r.entities} entities).`);
         return 0;
       }
       case "brief":
@@ -402,7 +418,7 @@ export async function runTeachCommand(argv: string[]): Promise<number> {
         return 0;
       }
       default:
-        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
+        console.error("Usage: plum teach match <query> | survey [dir] [--concept id] | outline <file…> | index [dir] | brief <concept> [--lang L] [--full] | render --title T [--out F] [--in slides.json]");
         return 1;
     }
   } catch (e) {

@@ -29,7 +29,11 @@ concepts exist and offer the closest; don't pretend the library covers it.
 "$P" teach outline <file> [<file> …]        # the 1–3 candidates you'll bind to
 ```
 
-`survey` prints the stack, domain nouns and up to three candidate files for each role category the concept needs.
+`survey` prints the stack, domain nouns and up to three candidate files for each role category the concept needs —
+plus a **From code-map** section with facts from the structural graph when code-map is installed and the repo is
+indexed. If `survey` ends with "Strongly recommended: install code-map", pass that recommendation (and the install
+commands) to the user once per session, briefly, then continue with the file-name results. If it says the repo isn't
+indexed, offer to run `"$P" teach index` (local, nothing written into the repo) and re-run the survey if they agree.
 `outline` prints each file's numbered declarations (classes, methods, data-access imports) — enough to bind roles
 and choose line ranges for excerpts. Only if an outline can't answer a binding question, Read a narrow line range.
 Never invent repo code; anything you write in their domain is labelled *illustrative*.
