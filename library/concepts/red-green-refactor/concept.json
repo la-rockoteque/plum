@@ -1,0 +1,138 @@
+{
+  "id": "red-green-refactor",
+  "title": "Red, Green, Refactor",
+  "category": "testing",
+  "domain": "testing",
+  "level": "foundation",
+  "summary": "A failing test for a new rule, the smallest change that passes it, then a cleanup pass the tests protect.",
+  "prerequisites": [],
+  "related": [
+    "repository"
+  ],
+  "signals": [
+    "production changes with no test in the same commit",
+    "a big feature implemented in one pass, tests written afterward to match it",
+    "a bugfix with no new test pinning the bug",
+    "hesitation to clean up code because \"it works, don't touch it\""
+  ],
+  "roles": {
+    "Order": "the module under test, at a snapshot in its TDD cycle",
+    "cancel()": "the operation the new rule constrains",
+    "a shipped order can't be cancelled": "the new requirement driving the cycle",
+    "the red test": "the new assertion, written before the code satisfies it",
+    "the guard": "the minimal production change that makes the red test pass",
+    "canCancel() / OrderStatus": "the refactor: the same rule, named and in one place"
+  },
+  "stages": [
+    {
+      "id": "red",
+      "title": "Red",
+      "idea": "The new rule doesn't exist yet. The test that will drive it currently documents the flaw it will fix."
+    },
+    {
+      "id": "green",
+      "title": "Green",
+      "idea": "The smallest change that satisfies the new rule — deliberately crude, a bare status comparison."
+    },
+    {
+      "id": "refactor",
+      "title": "Refactor",
+      "idea": "Same behaviour, cleaner design: the rule gets a name. The same tests prove nothing broke."
+    }
+  ],
+  "checks": [
+    "Why does the red stage's test assert the current, flawed behaviour instead of being marked failing or skipped?",
+    "What makes the green stage's fix \"deliberately crude\", and why is that acceptable at that point?",
+    "What must stay identical between the green and refactor stages, and what proves it?",
+    "Why is skipping the refactor step not \"saving time\"?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "red": [
+          "src/red_green_refactor/red.py"
+        ],
+        "green": [
+          "src/red_green_refactor/green.py"
+        ],
+        "refactor": [
+          "src/red_green_refactor/refactor.py"
+        ]
+      },
+      "tests": [
+        "tests/test_red_green_refactor.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_red_green_refactor.py"
+    },
+    "typescript": {
+      "stages": {
+        "red": [
+          "src/red-green-refactor/red.ts"
+        ],
+        "green": [
+          "src/red-green-refactor/green.ts"
+        ],
+        "refactor": [
+          "src/red-green-refactor/refactor.ts"
+        ]
+      },
+      "tests": [
+        "tests/red-green-refactor.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/red-green-refactor.test.js"
+    },
+    "go": {
+      "stages": {
+        "red": [
+          "redgreenrefactor/red/order.go"
+        ],
+        "green": [
+          "redgreenrefactor/green/order.go"
+        ],
+        "refactor": [
+          "redgreenrefactor/refactor/order.go"
+        ]
+      },
+      "tests": [
+        "redgreenrefactor/red/order_test.go",
+        "redgreenrefactor/green/order_test.go",
+        "redgreenrefactor/refactor/order_test.go"
+      ],
+      "run": "go test ./redgreenrefactor/..."
+    },
+    "dotnet": {
+      "stages": {
+        "red": [
+          "RepositoryExample/RedGreenRefactor/Red/Order.cs"
+        ],
+        "green": [
+          "RepositoryExample/RedGreenRefactor/Green/Order.cs"
+        ],
+        "refactor": [
+          "RepositoryExample/RedGreenRefactor/Refactor/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/RedGreenRefactorTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.RedGreenRefactorTests."
+    },
+    "kotlin": {
+      "stages": {
+        "red": [
+          "src/main/kotlin/example/redgreenrefactor/red/Order.kt"
+        ],
+        "green": [
+          "src/main/kotlin/example/redgreenrefactor/green/Order.kt"
+        ],
+        "refactor": [
+          "src/main/kotlin/example/redgreenrefactor/refactor/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/RedGreenRefactorTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.RedGreenRefactorTest'"
+    }
+  }
+}
