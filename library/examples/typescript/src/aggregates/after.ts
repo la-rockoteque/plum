@@ -1,9 +1,12 @@
 const MAX_LINES = 10;
 
+export type OrderStatus = "pending" | "shipped" | "cancelled";
+
 export class OrderCancelledError extends Error {}
 export class InvalidQuantityError extends Error {}
 export class TooManyLinesError extends Error {}
 export class LineNotFoundError extends Error {}
+export class CurrencyMismatchError extends Error {}
 
 // Held only inside the aggregate; callers only ever see copies of it.
 export class OrderLine {
@@ -12,26 +15,25 @@ export class OrderLine {
     public sku: string,
     public quantity: number,
     public unitPriceMinor: number,
-    public currency: string,
   ) {}
 
   copy(): OrderLine {
-    return new OrderLine(this.id, this.sku, this.quantity, this.unitPriceMinor, this.currency);
+    return new OrderLine(this.id, this.sku, this.quantity, this.unitPriceMinor);
   }
 }
 
 // The aggregate root: the only entry point for reading or changing its lines.
 export class Order {
-  private _status = "pending";
   private lines_: OrderLine[] = [];
   private nextLineId = 1;
 
   constructor(
     public readonly id: number,
     private readonly currency: string = "USD",
+    private _status: OrderStatus = "pending",
   ) {}
 
-  get status(): string {
+  get status(): OrderStatus {
     return this._status;
   }
 
@@ -45,56 +47,40 @@ export class Order {
     return this.lines_.reduce((sum, line) => sum + line.quantity * line.unitPriceMinor, 0);
   }
 
-  addLine(sku: string, quantity: number, unitPriceMinor: number): number {
-    this.guardNotCancelled();
-    this.guardQuantity(quantity);
-    if (this.lines_.length >= MAX_LINES) {
-      throw new TooManyLinesError(`an order can have at most ${MAX_LINES} lines`);
-    }
-    const line = new OrderLine(this.nextLineId, sku, quantity, unitPriceMinor, this.currency);
+  addLine(sku: string, quantity: number, unitPriceMinor: number, currency: string): number {
+    this.guard(quantity);
+    if (currency !== this.currency) throw new CurrencyMismatchError(`line currency ${currency} does not match order currency ${this.currency}`);
+    if (this.lines_.length >= MAX_LINES) throw new TooManyLinesError(`an order can have at most ${MAX_LINES} lines`);
+    const line = new OrderLine(this.nextLineId, sku, quantity, unitPriceMinor);
     this.nextLineId += 1;
     this.lines_.push(line);
     return line.id;
   }
 
   changeQuantity(lineId: number, quantity: number): void {
-    this.guardNotCancelled();
-    this.guardQuantity(quantity);
-    this.find(lineId).quantity = quantity;
+    this.guard(quantity);
+    const line = this.lines_.find((l) => l.id === lineId);
+    if (!line) throw new LineNotFoundError(`no such line: ${lineId}`);
+    line.quantity = quantity;
   }
 
-  removeLine(lineId: number): void {
-    this.guardNotCancelled();
-    const index = this.indexOf(lineId);
-    this.lines_.splice(index, 1);
-  }
-
+  // Enforces the aggregate's own invariant: a shipped or already-cancelled order can't be cancelled.
   cancel(): void {
+    if (this._status !== "pending") throw new OrderCancelledError("cannot cancel a shipped or already-cancelled order");
     this._status = "cancelled";
   }
 
-  private find(lineId: number): OrderLine {
-    const line = this.lines_.find((l) => l.id === lineId);
-    if (!line) throw new LineNotFoundError(`no such line: ${lineId}`);
-    return line;
+  // Detached copy: used by the repository so a stored order is never a live reference.
+  copy(): Order {
+    const clone = new Order(this.id, this.currency, this._status);
+    clone.lines_ = this.lines;
+    clone.nextLineId = this.nextLineId;
+    return clone;
   }
 
-  private indexOf(lineId: number): number {
-    const index = this.lines_.findIndex((l) => l.id === lineId);
-    if (index === -1) throw new LineNotFoundError(`no such line: ${lineId}`);
-    return index;
-  }
-
-  private guardNotCancelled(): void {
-    if (this._status === "cancelled") {
-      throw new OrderCancelledError("cannot modify a cancelled order");
-    }
-  }
-
-  private guardQuantity(quantity: number): void {
-    if (quantity < 1) {
-      throw new InvalidQuantityError("quantity must be at least 1");
-    }
+  private guard(quantity: number): void {
+    if (this._status === "cancelled") throw new OrderCancelledError("cannot modify a cancelled order");
+    if (quantity < 1) throw new InvalidQuantityError("quantity must be at least 1");
   }
 }
 
@@ -103,10 +89,10 @@ export class OrderRepository {
   private orders = new Map<number, Order>();
 
   save(order: Order): void {
-    this.orders.set(order.id, order);
+    this.orders.set(order.id, order.copy());
   }
 
   get(orderId: number): Order | undefined {
-    return this.orders.get(orderId);
+    return this.orders.get(orderId)?.copy();
   }
 }

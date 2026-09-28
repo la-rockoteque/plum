@@ -1,6 +1,13 @@
 from dataclasses import dataclass, replace
+from enum import Enum
 
 MAX_LINES = 10
+
+
+class OrderStatus(Enum):
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    CANCELLED = "cancelled"
 
 
 class OrderCancelledError(Exception):
@@ -19,29 +26,30 @@ class LineNotFoundError(Exception):
     pass
 
 
+class CurrencyMismatchError(Exception):
+    pass
+
+
 @dataclass
 class OrderLine:
-    """Held only inside the aggregate; callers only ever see copies of it."""
-
     id: int
     sku: str
     quantity: int
     unit_price_minor: int
-    currency: str
 
 
 class Order:
     """The aggregate root: the only entry point for reading or changing its lines."""
 
-    def __init__(self, id: int, currency: str = "USD") -> None:
+    def __init__(self, id: int, currency: str = "USD", status: OrderStatus = OrderStatus.PENDING) -> None:
         self.id = id
-        self._status = "pending"
+        self._status = status
         self._currency = currency
         self._lines: list[OrderLine] = []
         self._next_line_id = 1
 
     @property
-    def status(self) -> str:
+    def status(self) -> OrderStatus:
         return self._status
 
     @property
@@ -54,47 +62,40 @@ class Order:
         """Always derived from the current lines — never a cache that can go stale."""
         return sum(line.quantity * line.unit_price_minor for line in self._lines)
 
-    def add_line(self, sku: str, quantity: int, unit_price_minor: int) -> int:
-        self._guard_not_cancelled()
-        self._guard_quantity(quantity)
+    def add_line(self, sku: str, quantity: int, unit_price_minor: int, currency: str) -> int:
+        self._guard(quantity)
+        if currency != self._currency:
+            raise CurrencyMismatchError(f"line currency {currency} does not match order currency {self._currency}")
         if len(self._lines) >= MAX_LINES:
             raise TooManyLinesError(f"an order can have at most {MAX_LINES} lines")
-        line = OrderLine(
-            id=self._next_line_id,
-            sku=sku,
-            quantity=quantity,
-            unit_price_minor=unit_price_minor,
-            currency=self._currency,
-        )
+        line = OrderLine(self._next_line_id, sku, quantity, unit_price_minor)
         self._next_line_id += 1
         self._lines.append(line)
         return line.id
 
     def change_quantity(self, line_id: int, quantity: int) -> None:
-        self._guard_not_cancelled()
-        self._guard_quantity(quantity)
-        index = self._index_of(line_id)
-        self._lines[index].quantity = quantity
-
-    def remove_line(self, line_id: int) -> None:
-        self._guard_not_cancelled()
-        index = self._index_of(line_id)
-        del self._lines[index]
+        self._guard(quantity)
+        line = next((candidate for candidate in self._lines if candidate.id == line_id), None)
+        if line is None:
+            raise LineNotFoundError(f"no such line: {line_id}")
+        line.quantity = quantity
 
     def cancel(self) -> None:
-        self._status = "cancelled"
+        """Enforces the aggregate's own invariant: a shipped or already-cancelled order can't be cancelled."""
+        if self._status is not OrderStatus.PENDING:
+            raise OrderCancelledError("cannot cancel a shipped or already-cancelled order")
+        self._status = OrderStatus.CANCELLED
 
-    def _index_of(self, line_id: int) -> int:
-        for i, line in enumerate(self._lines):
-            if line.id == line_id:
-                return i
-        raise LineNotFoundError(f"no such line: {line_id}")
+    def copy(self) -> "Order":
+        """Detached copy: used by the repository so a stored order is never a live reference."""
+        clone = Order(self.id, self._currency, self._status)
+        clone._lines = self.lines
+        clone._next_line_id = self._next_line_id
+        return clone
 
-    def _guard_not_cancelled(self) -> None:
-        if self._status == "cancelled":
+    def _guard(self, quantity: int) -> None:
+        if self._status == OrderStatus.CANCELLED:
             raise OrderCancelledError("cannot modify a cancelled order")
-
-    def _guard_quantity(self, quantity: int) -> None:
         if quantity < 1:
             raise InvalidQuantityError("quantity must be at least 1")
 
@@ -106,7 +107,8 @@ class OrderRepository:
         self._orders: dict[int, Order] = {}
 
     def save(self, order: Order) -> None:
-        self._orders[order.id] = order
+        self._orders[order.id] = order.copy()
 
     def get(self, order_id: int) -> Order | None:
-        return self._orders.get(order_id)
+        order = self._orders.get(order_id)
+        return order.copy() if order is not None else None

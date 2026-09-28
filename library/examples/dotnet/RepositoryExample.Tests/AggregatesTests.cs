@@ -72,7 +72,7 @@ public class AggregatesTests
     public void After_AddingALineUpdatesTheTotalImmediately()
     {
         var order = new AggregatesAfter.Order(1);
-        order.AddLine("WIDGET", 2, 500);
+        order.AddLine("WIDGET", 2, 500, "USD");
         Assert.Equal(1000, order.TotalMinor);
     }
 
@@ -82,16 +82,16 @@ public class AggregatesTests
         var order = new AggregatesAfter.Order(1);
         for (var i = 0; i < 10; i++)
         {
-            order.AddLine("SKU", 1, 100);
+            order.AddLine("SKU", 1, 100, "USD");
         }
-        Assert.Throws<AggregatesAfter.TooManyLinesException>(() => order.AddLine("SKU", 1, 100));
+        Assert.Throws<AggregatesAfter.TooManyLinesException>(() => order.AddLine("SKU", 1, 100, "USD"));
     }
 
     [Fact]
     public void After_ChangingALinesQuantityToZeroIsRejected()
     {
         var order = new AggregatesAfter.Order(1);
-        var lineId = order.AddLine("WIDGET", 2, 500);
+        var lineId = order.AddLine("WIDGET", 2, 500, "USD");
         Assert.Throws<AggregatesAfter.InvalidQuantityException>(() => order.ChangeQuantity(lineId, 0));
     }
 
@@ -99,16 +99,33 @@ public class AggregatesTests
     public void After_ChangingALineOnACancelledOrderIsRejected()
     {
         var order = new AggregatesAfter.Order(1);
-        var lineId = order.AddLine("WIDGET", 2, 500);
+        var lineId = order.AddLine("WIDGET", 2, 500, "USD");
         order.Cancel();
         Assert.Throws<AggregatesAfter.OrderCancelledException>(() => order.ChangeQuantity(lineId, 3));
+    }
+
+    [Fact]
+    public void After_CancellingAShippedOrAlreadyCancelledOrderIsRejected()
+    {
+        var shipped = new AggregatesAfter.Order(1, status: AggregatesAfter.OrderStatus.Shipped);
+        Assert.Throws<AggregatesAfter.OrderCancelledException>(() => shipped.Cancel());
+
+        var cancelled = new AggregatesAfter.Order(2, status: AggregatesAfter.OrderStatus.Cancelled);
+        Assert.Throws<AggregatesAfter.OrderCancelledException>(() => cancelled.Cancel());
+    }
+
+    [Fact]
+    public void After_AddingALineInAnotherCurrencyIsRejected()
+    {
+        var order = new AggregatesAfter.Order(1, currency: "USD");
+        Assert.Throws<AggregatesAfter.CurrencyMismatchException>(() => order.AddLine("WIDGET", 1, 500, "EUR"));
     }
 
     [Fact]
     public void After_TheLinesReturnedByTheOrderAreCopiesThatCannotMutateIt()
     {
         var order = new AggregatesAfter.Order(1);
-        order.AddLine("WIDGET", 2, 500);
+        order.AddLine("WIDGET", 2, 500, "USD");
         var fetched = order.Lines[0];
         fetched.Quantity = 99;
         Assert.Equal(2, order.Lines[0].Quantity);
@@ -119,13 +136,21 @@ public class AggregatesTests
     public void After_TheRepositorySavesAndLoadsTheWholeOrder()
     {
         var order = new AggregatesAfter.Order(1);
-        order.AddLine("WIDGET", 2, 500);
+        order.AddLine("WIDGET", 2, 500, "USD");
         var repo = new AggregatesAfter.OrderRepository();
         repo.Save(order);
+
+        // Mutating the original after save must not reach the stored copy.
+        order.AddLine("GADGET", 1, 250, "USD");
 
         var loaded = repo.Get(1);
         Assert.NotNull(loaded);
         Assert.Equal(1000, loaded!.TotalMinor);
         Assert.Single(loaded.Lines);
+
+        // Mutating the loaded copy must not reach the stored order either.
+        loaded.AddLine("MUTATED", 1, 1, "USD");
+        var again = repo.Get(1);
+        Assert.Equal(1000, again!.TotalMinor);
     }
 }

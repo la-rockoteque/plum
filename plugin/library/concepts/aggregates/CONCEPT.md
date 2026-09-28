@@ -25,7 +25,7 @@ boundary: **one repository loads and saves a whole aggregate**, never a piece of
 before:  Order { totalMinor (cached) } ── OrderLine ←── OrderLineRepository ←── any caller
                                               ↑ reachable and mutable directly, rule lives nowhere
 
-after:   caller ──► Order (root: addLine, changeQuantity, removeLine, cancel) ──► OrderLine (internal, copies only)
+after:   caller ──► Order (root: addLine, changeQuantity, cancel) ──► OrderLine (internal, copies only)
                           ▲
                           └── OrderRepository (loads/saves the whole Order)
 ```
@@ -46,12 +46,14 @@ after:   caller ──► Order (root: addLine, changeQuantity, removeLine, canc
    to zero, or edit a line on a cancelled order — all without going near `Order`. `Order.totalMinor` is a plain
    cached field: correct right after someone calls `recomputeTotal`, and stale the moment any line changes after
    that, because nothing ties the two together.
-2. **after** — `Order` is the aggregate root: `addLine`, `changeQuantity`, `removeLine` and `cancel` are the only
-   ways in, and each checks every invariant that matters (not cancelled, quantity ≥ 1, at most 10 lines) before
-   it changes anything. `totalMinor` is a computed property, derived from the current lines on every read, so it
-   can never go stale. The `lines` getter returns copies, so a caller who fetches a line and mutates it changes
-   nothing about the order. One `OrderRepository` saves and loads the `Order` as a whole — there is no repository
-   for a line by itself.
+2. **after** — `Order` is the aggregate root: `addLine`, `changeQuantity` and `cancel` are the only ways in, and
+   each checks every invariant that matters (not cancelled, quantity ≥ 1, at most 10 lines, same currency as the
+   order) before it changes anything. `cancel` itself enforces the aggregate's own rule that a shipped or
+   already-cancelled order can't be cancelled again — the invariant lives on the root, not scattered across every
+   caller. `totalMinor` is a computed property, derived from the current lines on every read, so it can never go
+   stale. The `lines` getter returns copies, so a caller who fetches a line and mutates it changes nothing about
+   the order. One `OrderRepository` saves and loads the `Order` as a whole — never a line by itself — and it
+   copies on both `save` and `get`, so neither the caller nor the repository ever hold the same live object.
 
 ## Trade-offs / when not to
 

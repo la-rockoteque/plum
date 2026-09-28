@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Order as BeforeOrder, OrderLine, OrderLineRepository, recomputeTotal } from "../src/aggregates/before.js";
 import {
+  CurrencyMismatchError,
   InvalidQuantityError,
   Order,
   OrderCancelledError,
@@ -60,34 +61,47 @@ test("before: recomputeTotal must be called manually to stay correct", () => {
 
 test("after: adding a line updates the total immediately", () => {
   const order = new Order(1);
-  order.addLine("WIDGET", 2, 500);
+  order.addLine("WIDGET", 2, 500, "USD");
   assert.equal(order.totalMinor, 1000);
 });
 
 test("after: an eleventh line is rejected", () => {
   const order = new Order(1);
   for (let i = 0; i < 10; i++) {
-    order.addLine(`SKU-${i}`, 1, 100);
+    order.addLine(`SKU-${i}`, 1, 100, "USD");
   }
-  assert.throws(() => order.addLine("SKU-10", 1, 100), TooManyLinesError);
+  assert.throws(() => order.addLine("SKU-10", 1, 100, "USD"), TooManyLinesError);
 });
 
 test("after: changing a line's quantity to zero is rejected", () => {
   const order = new Order(1);
-  const lineId = order.addLine("WIDGET", 2, 500);
+  const lineId = order.addLine("WIDGET", 2, 500, "USD");
   assert.throws(() => order.changeQuantity(lineId, 0), InvalidQuantityError);
 });
 
 test("after: changing a line on a cancelled order is rejected", () => {
   const order = new Order(1);
-  const lineId = order.addLine("WIDGET", 2, 500);
+  const lineId = order.addLine("WIDGET", 2, 500, "USD");
   order.cancel();
   assert.throws(() => order.changeQuantity(lineId, 3), OrderCancelledError);
 });
 
+test("after: cancelling a shipped or already cancelled order is rejected", () => {
+  const shipped = new Order(1, "USD", "shipped");
+  assert.throws(() => shipped.cancel(), OrderCancelledError);
+
+  const cancelled = new Order(2, "USD", "cancelled");
+  assert.throws(() => cancelled.cancel(), OrderCancelledError);
+});
+
+test("after: adding a line in another currency is rejected", () => {
+  const order = new Order(1, "USD");
+  assert.throws(() => order.addLine("WIDGET", 1, 500, "EUR"), CurrencyMismatchError);
+});
+
 test("after: the lines returned by the order are copies that cannot mutate it", () => {
   const order = new Order(1);
-  order.addLine("WIDGET", 2, 500);
+  order.addLine("WIDGET", 2, 500, "USD");
   const fetched = order.lines[0];
   fetched.quantity = 99;
   assert.equal(order.lines[0].quantity, 2);
@@ -96,12 +110,20 @@ test("after: the lines returned by the order are copies that cannot mutate it", 
 
 test("after: the repository saves and loads the whole order", () => {
   const order = new Order(1);
-  order.addLine("WIDGET", 2, 500);
+  order.addLine("WIDGET", 2, 500, "USD");
   const repo = new OrderRepository();
   repo.save(order);
+
+  // Mutating the original after save must not reach the stored copy.
+  order.addLine("GADGET", 1, 250, "USD");
 
   const loaded = repo.get(1);
   assert.ok(loaded);
   assert.equal(loaded.totalMinor, 1000);
   assert.equal(loaded.lines.length, 1);
+
+  // Mutating the loaded copy must not reach the stored order either.
+  loaded.addLine("MUTATED", 1, 1, "USD");
+  const again = repo.get(1);
+  assert.equal(again?.totalMinor, 1000);
 });

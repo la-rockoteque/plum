@@ -34,7 +34,7 @@
     {
       "id": "after",
       "title": "Order as the aggregate root",
-      "idea": "Order is the only entry point (addLine, changeQuantity, removeLine, cancel); lines are never reachable for mutation from outside; one repository saves and loads the whole aggregate; the total is always derived, never cached."
+      "idea": "Order is the only entry point (addLine, changeQuantity, cancel); lines are never reachable for mutation from outside; cancel enforces that a shipped or already-cancelled order can't be cancelled again; one repository saves and loads a detached copy of the whole aggregate; the total is always derived, never cached."
     }
   ],
   "checks": [
