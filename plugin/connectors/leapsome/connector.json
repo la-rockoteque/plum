@@ -1,0 +1,12 @@
+{
+  "id": "leapsome",
+  "name": "Leapsome",
+  "kind": "mcp-mediated",
+  "capabilities": ["goals.create", "goals.progress", "goals.comment"],
+  "mcp": {
+    "discover": "mcp__.*[Ll]eapsome.*",
+    "requires": "Leapsome's MCP connected in Claude (claude.ai connector or `claude mcp add`), with MCP enabled for your workspace by a Leapsome admin"
+  },
+  "sends": ["goal title", "one-sentence reason", "suggested practice", "due date", "progress percent", "a short progress comment"],
+  "visibility": "Goals and progress follow your Leapsome goal visibility — they may be visible to your manager and HR."
+}
