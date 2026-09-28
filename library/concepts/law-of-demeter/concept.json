@@ -1,0 +1,117 @@
+{
+  "id": "law-of-demeter",
+  "title": "Law of Demeter",
+  "category": "principles",
+  "domain": "architecture",
+  "level": "intermediate",
+  "summary": "A method that reaches through several collaborators to get one fact should ask its own direct collaborator the question instead.",
+  "prerequisites": [
+    "coupling-cohesion"
+  ],
+  "related": [
+    "single-responsibility"
+  ],
+  "signals": [
+    "a call chain three or more objects deep (`a.b().c().d()`) used to reach a single fact",
+    "a non-null assertion or defensive null check inserted only to keep a long chain compiling",
+    "a bug where introducing a new variant of one link in the chain (a different address shape, a moved field) breaks every caller that walked through it",
+    "a wrapper method added only to expose another object's internals one level further, so a caller can keep chaining through it"
+  ],
+  "roles": {
+    "Order": "caller that used to walk the whole chain itself; after the fix, asks one question of its direct collaborator",
+    "Customer": "the direct collaborator Order actually talks to; forwards each question to whichever object owns the answer",
+    "Address / Wallet": "objects one hop further out that answer the question about themselves once the chain stops passing through them",
+    "Country / Card": "innermost data the original chain reached for; now read by the object that sits right next to it, not by the distant caller"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Train wreck",
+      "idea": "CancellationPolicy walks order.customer().address().country().code() and order.customer().wallet().card().isExpired() to decide the return method and the refund, reaching through objects it doesn't own to get there."
+    },
+    {
+      "id": "after",
+      "title": "Ask your neighbor",
+      "idea": "Order asks its customer, and each object in turn asks its own direct collaborator; a pickup point's missing country is absorbed inside Address instead of breaking every caller three hops away."
+    }
+  ],
+  "checks": [
+    "\"Only talk to your immediate friends\" — name the kinds of object a method is allowed to call without violating the Law of Demeter.",
+    "Why doesn't a fluent builder chain like `order.items().add(x).add(y)` violate the Law of Demeter the way `order.customer().address().country().code()` does?",
+    "The after version adds a method to Address and to Wallet instead of moving the whole chain into one place. Why does spreading the behaviour across each object, rather than centralizing it in Order, avoid turning Order into a wrapper for everything downstream?",
+    "A test in this concept shows the before code breaking on a pickup point address. What made it break, and why does the after version handle the same input instead of just moving where it breaks?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/law_of_demeter/before.py"
+        ],
+        "after": [
+          "src/law_of_demeter/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_law_of_demeter.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_law_of_demeter.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/law-of-demeter/before.ts"
+        ],
+        "after": [
+          "src/law-of-demeter/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/law-of-demeter.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/law-of-demeter.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "lawofdemeter/before/policy.go"
+        ],
+        "after": [
+          "lawofdemeter/after/policy.go"
+        ]
+      },
+      "tests": [
+        "lawofdemeter/before/policy_test.go",
+        "lawofdemeter/after/policy_test.go"
+      ],
+      "run": "go test ./lawofdemeter/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/LawOfDemeter/Before/Policy.cs"
+        ],
+        "after": [
+          "RepositoryExample/LawOfDemeter/After/Policy.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/LawOfDemeterTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.LawOfDemeterTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/lawofdemeter/before/Policy.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/lawofdemeter/after/Policy.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/LawOfDemeterTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.LawOfDemeterTest'"
+    }
+  }
+}
