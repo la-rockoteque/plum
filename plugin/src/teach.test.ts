@@ -248,3 +248,29 @@ test("every concept in the library produces a plan that renders", () => {
     }
   }
 });
+
+// ── French decks ─────────────────────────────────────────────────────────────
+
+test("a French plan uses French chrome and asks for a translation of every concept string", () => {
+  const plan = buildPlan("unit-of-work", "typescript", "fr");
+  expect(plan.slots.map((s) => s.name)).toContain("translations");
+  expect(plan.sources.length).toBeGreaterThan(5);
+  expect(plan.sources).toContain(plan.concept.summary);
+  expect(plan.slides.find((s) => s.kind === "quiz")?.eyebrow).toBe("Vérifie ta compréhension");
+  expect(buildPlan("unit-of-work", "typescript", "en").slots.map((s) => s.name)).not.toContain("translations");
+});
+
+test("a French render applies the translations and translates the deck chrome", () => {
+  const plan = buildPlan("unit-of-work", "typescript", "fr");
+  const bindings = Object.fromEntries(Object.keys(plan.concept.roles).map((r) => [r, "manquant"]));
+  const translations = plan.sources.map((_, i) => `FR${i}`);
+  const html = renderPlan("unit-of-work", "typescript", { ...fills, bindings, translations }, undefined, "fr");
+  expect(html).toContain(`<title>Cours : FR0</title>`);
+  expect(html).toContain("<summary>Réponse</summary>");
+  expect(html).toContain(">Notes<");
+  expect(html).toContain('<td class="missing">manquant</td>');
+  expect(html).not.toContain(plan.concept.summary);
+  expect(html).toContain(`Cours · FR${plan.sources.indexOf(plan.concept.category)}`);
+  expect(() => renderPlan("unit-of-work", "typescript", { ...fills, bindings, translations: ["x"] }, undefined, "fr"))
+    .toThrow(/translations needs/);
+});
