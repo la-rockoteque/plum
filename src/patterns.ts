@@ -1,14 +1,17 @@
 import { getDb }                          from "./db.js";
 import { getConfig }                      from "./config.js";
 
-export type PatternId =
-  | "test_delegation"
-  | "debugging_avoidance"
-  | "blind_acceptance"
-  | "architectural_outsourcing"
-  | "repeated_weakness"
-  | "decision_outsourcing"
-  | "design_critique_atrophy";
+export const PATTERN_IDS = [
+  "test_delegation",
+  "debugging_avoidance",
+  "blind_acceptance",
+  "architectural_outsourcing",
+  "repeated_weakness",
+  "decision_outsourcing",
+  "design_critique_atrophy"
+] as const;
+
+export type PatternId = (typeof PATTERN_IDS)[number];
 
 // Metadata keys stored in user_prompt events
 const DECISION_META_KEY = "is_decision_seeking";

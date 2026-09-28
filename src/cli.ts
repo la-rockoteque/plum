@@ -29,11 +29,18 @@ import { detectAndMarkVerification, manualVerify }    from "./verify.js";
 import { getConfig }                                  from "./config.js";
 import { weeklyStatus }                               from "./status.js";
 import { loadConcepts, formatConceptList, LIBRARY_DIR } from "./library.js";
+import { record, recordError, runStatsCommand, type UsageData } from "./telemetry.js";
+import { runFeedbackCommand }                         from "./feedback.js";
+import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
 import { join }                                       from "path";
 import { readFileSync, writeFileSync, existsSync, rmSync } from "fs";
 
 const command = process.argv[2] ?? "help";
+
+// Counts collected during this run for opt-in usage statistics (never text, paths or names).
+const usage: Required<Pick<UsageData, "counts" | "extensions">> = { counts: {}, extensions: [] };
+const count = (key: string, n = 1) => { usage.counts[key] = (usage.counts[key] ?? 0) + n; };
 
 async function readStdin(): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
@@ -59,6 +66,8 @@ async function main(): Promise<void> {
     case "reset-scores": return resetScores();
     case "wipe":         return wipeData();
     case "concepts":     return listConcepts(process.argv[3] === "--json");
+    case "feedback":     { process.exitCode = await runFeedbackCommand(process.argv.slice(3)); return; }
+    case "stats":        { process.exitCode = await runStatsCommand(process.argv.slice(3)); return; }
     case "mcp":          { await import("./mcp-server.js"); return; }
     case "install":      return console.log(INSTALL_HELP);
     case "uninstall":    return uninstallHooks();
@@ -85,6 +94,10 @@ Plum — Professor Plum cognitive atrophy harness
     reset-scores  reset all skill scores to 50
     wipe          delete all data in ~/.plum/ (irreversible)
     concepts      list the concept library (--json for the full manifests)
+    feedback      build a pre-filled feedback form link (--kind feature|bug|feedback --message …
+                  [--why …] [--contact …] [--no-context] [--open]); you submit it yourself
+    stats         opt-in usage statistics: status | summary [--days N] [--json] | verdicts <json> |
+                  send [--open] | clear
 
   Setup:
     install       show how to install Plum as a Claude Code plugin
@@ -112,6 +125,9 @@ async function handleUserPrompt(): Promise<void> {
   const now = Date.now();
   const str      = String(prompt);
   const category = categorizePrompt(str);
+  count(`category_${category}`);
+  if (isDecisionSeeking(str)) count("decision_seeking");
+  if (isDesignRelated(str))   count("design_related");
 
   ensureSession(session_id, now, cwd);
   db.run(
@@ -144,12 +160,15 @@ async function handlePreTool(): Promise<void> {
   ).get(p.pattern, now - cfg.interventionCooldownMs, p.scope, session_id) !== null;
 
   const patterns = detectPatterns(session_id).filter((p) => !recentlyNudged(p));
+  count("patterns_detected", patterns.length);
   if (patterns.length === 0) return;
 
   const top = buildInterventions(patterns)[0];
   if (!top) return;
 
   const gate = cfg.mode === "gating" && top.blocking;
+  count(`nudge_${top.type}`);
+  if (gate) count("gate_ask");
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -184,6 +203,11 @@ async function handlePostTool(): Promise<void> {
     [session_id, now, tool_name, category, outputSize, significant ? 1 : 0, JSON.stringify({ file_path: (tool_input as any)?.file_path })]
   );
   db.run(`UPDATE sessions SET event_count = event_count + 1 WHERE id = ?`, [session_id]);
+
+  count(`category_${category}`);
+  if (result.verified) count("verified");
+  const filePath = (tool_input as any)?.file_path;
+  if (typeof filePath === "string" && extname(filePath)) usage.extensions.push(extname(filePath));
 
   // A delegation that isn't itself a verification of a prior one counts against the domain
   if (significant && !result.verified) updateSkillScore(category, true, false);
@@ -379,5 +403,13 @@ function uninstallHooks(): void {
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
-// Hooks must never break Claude Code: report and exit 0 (hook stderr is only shown in debug mode)
-main().catch((e) => { console.error(`[Plum] ${command} failed:`, e); process.exit(0); });
+// Hooks must never break Claude Code: report and exit 0 (hook stderr is only shown in debug mode).
+// Usage statistics are recorded once per run; record()/recordError() are no-ops unless opted in and never throw.
+const started = performance.now();
+main()
+  .then(() => { if (command !== "stats") record(command, { ...usage, durationMs: performance.now() - started }); })
+  .catch((e) => {
+    recordError(command, e, { ...usage, durationMs: performance.now() - started });
+    console.error(`[Plum] ${command} failed:`, e);
+    process.exit(0);
+  });

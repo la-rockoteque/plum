@@ -7,3 +7,5 @@ data/
 .idea/
 .omc/
 .DS_Store
+.claude/worktrees/
+.claude/settings.local.json

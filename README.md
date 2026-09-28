@@ -97,6 +97,7 @@ The plugin wires up:
 | `/plum:verify` | Mark the last delegation as reviewed |
 | `/plum:explain` | Explain-back loop, logged via MCP |
 | `/plum:teach <concept>` | Lecture deck on a concept, bound to the current repo's domain and architecture |
+| `/plum:feedback <text>` | Draft feedback or a feature request, review it, then open a pre-filled form you submit yourself |
 
 ### Concept library
 
@@ -119,6 +120,8 @@ bin/plum verify               # mark last delegation verified
 bin/plum export               # dump DB as JSON
 bin/plum reset-scores         # reset all scores to 50
 bin/plum wipe --confirm       # delete all local data
+bin/plum feedback --kind feature --message "…"   # print a pre-filled feedback link (--open to open it)
+bin/plum stats status         # opt-in usage statistics: status | summary | verdicts | send | clear
 bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
 ```
 
@@ -126,9 +129,18 @@ Development: `bun test`, `bun run typecheck`, `bun run validate`.
 
 ---
 
-## Configuration (`~/.plum/config.json`, optional)
+## Configuration (optional)
 
-Every key is optional; missing keys fall back to the defaults below.
+Three optional JSON files, merged in this order (later wins):
+
+| File | Scope |
+|---|---|
+| `<project>/.plum/config.json` | shared — committed, applies to everyone on the repo |
+| `~/.plum/config.json` | personal |
+| `<project>/.plum/config.local.json` | this machine only for this repo — keep it out of git |
+
+Every key is optional; missing keys fall back to the defaults below. **Exception — usage statistics:** only the
+personal or local file can turn `telemetry.enabled` (and `telemetry.debug`) on; a shared `false` always wins.
 
 ```jsonc
 {
@@ -144,11 +156,33 @@ Every key is optional; missing keys fall back to the defaults below.
     "archOutsourcingRate": 0.70,
     "weekLookbackMs": 604800000
   },
-  "domains": { "debugging": true }     // set a domain to false to silence its nudges
+  "domains": { "debugging": true },    // set a domain to false to silence its nudges
+  "feedback": {
+    "enabled": true,
+    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
+    "entryId": "entry.1018508464"      // the form's paragraph field
+  },
+  "telemetry": {
+    "enabled": false,                  // opt-in; personal/local config only
+    "debug": false,                    // also log tracebacks locally (contain paths; don't share)
+    "retentionDays": 30
+  }
 }
 ```
 
 Set `PLUM_DATA_DIR` to move the data directory (and config) elsewhere.
+
+---
+
+## Feedback
+
+Send feedback, bugs and feature requests with `/plum:feedback`, or directly through the
+[feedback form](https://forms.gle/TCAnGgHfUjDg6KkWA). Claude shows you the exact text first, and nothing is sent
+until you click Submit. See [docs/feedback.md](docs/feedback.md).
+
+**Usage statistics** are off by default, opt-in from your personal config only, stored locally as counts (never
+text, paths or names), and shared only if you submit a summary yourself —
+[docs/usage-statistics.md](docs/usage-statistics.md).
 
 ---
 

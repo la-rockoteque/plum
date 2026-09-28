@@ -19,6 +19,7 @@ import { detectPatterns }                                             from "./pa
 import { getDb, latestSessionId }                                     from "./db.js";
 import { weeklyStatus }                                               from "./status.js";
 import { conceptsForDomain }                                          from "./library.js";
+import { record, recordError }                                        from "./telemetry.js";
 
 // ─── stdio framing ───────────────────────────────────────────────────────────
 
@@ -77,11 +78,14 @@ function handleMessage(msg: any): void {
 
     case "tools/call": {
       const { name, arguments: args } = params ?? {};
+      const started = performance.now();
       try {
         const result = dispatchTool(name, args ?? {});
         respond(id, { content: [{ type: "text", text: result }] });
+        record(`mcp-${name}`, { durationMs: performance.now() - started });
       } catch (e) {
         respondError(id, -32603, String(e));
+        recordError(`mcp-${name}`, e, { durationMs: performance.now() - started });
       }
       break;
     }
