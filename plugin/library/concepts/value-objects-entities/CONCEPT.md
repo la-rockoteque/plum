@@ -41,13 +41,19 @@ after:   Order { id, status: OrderStatus, total: Money }             — entity 
    defined, or from moving from `"cancelled"` back to `"pending"`. `total` and `currency` are separate fields, so
    adding two orders' totals silently ignores whether the currencies match, and repeated float addition drifts
    (`0.1 + 0.1 + 0.1 != 0.3` in IEEE‑754 binary floating point).
-2. **after** — `OrderStatus` becomes a value object: it can only be one of its legal states, and only the
-   pending → cancelled move is allowed; parsing an unrecognized string is rejected at the boundary. `Money`
-   becomes a value object: immutable, storing an integer amount in the currency's minor unit (so repeated
+2. **after** — `OrderStatus` becomes a value object: it can only be one of its legal states (`pending`, `shipped`,
+   `cancelled`), and only `pending → shipped` and `pending → cancelled` are allowed — a shipped or cancelled order
+   can't be cancelled again, and neither can move back to `pending`. Parsing an unrecognized string is rejected
+   at the boundary with its own error (`UnknownStatus`), kept distinct from an illegal transition between two
+   *known* states (`InvalidStatusTransition`) — "this word isn't a status" and "you can't get there from here"
+   are different mistakes. `Order` only exposes `status` for reading; the sole way to change it is `ship()` /
+   `cancel()`, so a caller can't reach in and reset it directly the way the `before` stage's bare field allowed.
+   `Money` becomes a value object: immutable, storing an integer amount in the currency's minor unit (so repeated
    addition never drifts), refusing to add across currencies, and equal to another `Money` whenever the amount
    and currency match. `Order` stays a plain entity: its equality is based on `id` alone, so two different orders
    with identical status and total are still different orders, and the same order is still equal to itself after
-   its status changes.
+   its status changes — unlike the `before` stage, where comparing bare structs/records/dataclasses by value makes
+   the same order look like a different one the moment its status changes.
 
 ## Trade-offs / when not to
 

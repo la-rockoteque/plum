@@ -2,7 +2,7 @@ import dataclasses
 
 import pytest
 
-from value_objects_entities.after import CurrencyMismatch, InvalidStatusTransition, Money, Order, OrderStatus
+from value_objects_entities.after import CurrencyMismatch, InvalidStatusTransition, Money, Order, OrderStatus, UnknownStatus
 from value_objects_entities.before import Order as BeforeOrder
 from value_objects_entities.before import add_totals
 
@@ -31,9 +31,28 @@ def test_before_repeated_float_amounts_drift_from_the_exact_total() -> None:
     assert total != 0.3
 
 
-def test_after_constructing_an_order_with_an_unknown_status_is_rejected() -> None:
-    with pytest.raises(InvalidStatusTransition):
+def test_before_the_same_order_compares_unequal_to_itself_once_its_status_changes() -> None:
+    order = BeforeOrder(id=1, status="pending", total=9.99, currency="USD")
+    same_order_after_cancelling = dataclasses.replace(order, status="cancelled")
+    assert order != same_order_after_cancelling
+
+
+def test_after_parsing_an_unknown_status_is_rejected() -> None:
+    with pytest.raises(UnknownStatus):
         OrderStatus.parse("definitely-not-a-status")
+
+
+def test_after_shipping_a_pending_order_moves_it_to_shipped() -> None:
+    order = Order(id=1, status=OrderStatus.PENDING, total=Money(999, "USD"))
+    order.ship()
+    assert order.status is OrderStatus.SHIPPED
+
+
+def test_after_cancelling_a_shipped_order_is_rejected() -> None:
+    order = Order(id=1, status=OrderStatus.PENDING, total=Money(999, "USD"))
+    order.ship()
+    with pytest.raises(InvalidStatusTransition):
+        order.cancel()
 
 
 def test_after_cancelling_a_cancelled_order_is_rejected() -> None:
@@ -47,7 +66,15 @@ def test_after_a_cancelled_order_cannot_move_back_to_pending() -> None:
     order = Order(id=1, status=OrderStatus.PENDING, total=Money(999, "USD"))
     order.cancel()
     with pytest.raises(InvalidStatusTransition):
-        order.status = order.status.transition_to(OrderStatus.PENDING)
+        order.status.transition_to(OrderStatus.PENDING)
+
+
+def test_after_assigning_to_status_directly_is_rejected() -> None:
+    order = Order(id=1, status=OrderStatus.PENDING, total=Money(999, "USD"))
+    order.cancel()
+    with pytest.raises(AttributeError):
+        order.status = OrderStatus.PENDING  # type: ignore[misc]
+    assert order.status is OrderStatus.CANCELLED
 
 
 def test_after_adding_money_in_different_currencies_is_rejected() -> None:

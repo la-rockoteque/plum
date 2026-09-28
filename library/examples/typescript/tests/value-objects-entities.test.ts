@@ -7,6 +7,7 @@ import {
   Money,
   Order,
   OrderStatus,
+  UnknownStatus,
 } from "../src/value-objects-entities/after.js";
 
 test("before: an invalid status string is accepted", () => {
@@ -33,8 +34,26 @@ test("before: repeated float amounts drift from the exact total", () => {
   assert.notEqual(total, 0.3);
 });
 
-test("after: constructing an order with an unknown status is rejected", () => {
-  assert.throws(() => OrderStatus.parse("definitely-not-a-status"), InvalidStatusTransition);
+test("before: the same order compares unequal to itself once its status changes", () => {
+  const order = new BeforeOrder(1, "pending", 9.99, "USD");
+  const sameOrderAfterCancelling = new BeforeOrder(1, "cancelled", 9.99, "USD");
+  assert.notDeepStrictEqual(order, sameOrderAfterCancelling);
+});
+
+test("after: parsing an unknown status is rejected", () => {
+  assert.throws(() => OrderStatus.parse("definitely-not-a-status"), UnknownStatus);
+});
+
+test("after: shipping a pending order moves it to shipped", () => {
+  const order = new Order(1, OrderStatus.Pending, new Money(999, "USD"));
+  order.ship();
+  assert.ok(order.status.equals(OrderStatus.Shipped));
+});
+
+test("after: cancelling a shipped order is rejected", () => {
+  const order = new Order(1, OrderStatus.Pending, new Money(999, "USD"));
+  order.ship();
+  assert.throws(() => order.cancel(), InvalidStatusTransition);
 });
 
 test("after: cancelling a cancelled order is rejected", () => {

@@ -41,3 +41,12 @@ func TestBefore_RepeatedFloatAmountsDriftFromTheExactTotal(t *testing.T) {
 		t.Fatalf("expected float drift, got exact 0.3")
 	}
 }
+
+func TestBefore_TheSameOrderComparesUnequalToItselfOnceItsStatusChanges(t *testing.T) {
+	order := before.Order{ID: 1, Status: "pending", Total: 9.99, Currency: "USD"}
+	sameOrderAfterCancelling := order
+	sameOrderAfterCancelling.Status = "cancelled"
+	if order == sameOrderAfterCancelling {
+		t.Fatalf("expected the struct's field-by-field == to see a status change as a different value")
+	}
+}

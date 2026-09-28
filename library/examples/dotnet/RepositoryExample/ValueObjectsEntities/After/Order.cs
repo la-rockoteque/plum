@@ -5,10 +5,16 @@ public sealed class InvalidStatusTransitionException : Exception
     public InvalidStatusTransitionException(string message) : base(message) { }
 }
 
+public sealed class UnknownStatusException : Exception
+{
+    public UnknownStatusException(string message) : base(message) { }
+}
+
 // A value object: only these states exist, and only some moves between them are legal.
 public enum OrderStatus
 {
     Pending,
+    Shipped,
     Cancelled,
 }
 
@@ -17,13 +23,14 @@ public static class OrderStatuses
     public static OrderStatus Parse(string value) => value switch
     {
         "pending" => OrderStatus.Pending,
+        "shipped" => OrderStatus.Shipped,
         "cancelled" => OrderStatus.Cancelled,
-        _ => throw new InvalidStatusTransitionException($"Unknown order status: {value}"),
+        _ => throw new UnknownStatusException($"Unknown order status: {value}"),
     };
 
     public static OrderStatus TransitionTo(this OrderStatus status, OrderStatus target)
     {
-        if (status == OrderStatus.Pending && target == OrderStatus.Cancelled)
+        if (status == OrderStatus.Pending && (target == OrderStatus.Shipped || target == OrderStatus.Cancelled))
         {
             return target;
         }
@@ -53,6 +60,9 @@ public sealed record Money(long AmountMinor, string Currency)
 public sealed class Order
 {
     public int Id { get; }
+
+    // Read-only from outside: the only way to change status is Ship()/Cancel(), which enforce
+    // legal transitions. The private setter means a caller can't reach back in and reset it.
     public OrderStatus Status { get; private set; }
     public Money Total { get; }
 
@@ -62,6 +72,8 @@ public sealed class Order
         Status = status;
         Total = total;
     }
+
+    public void Ship() => Status = Status.TransitionTo(OrderStatus.Shipped);
 
     public void Cancel() => Status = Status.TransitionTo(OrderStatus.Cancelled);
 

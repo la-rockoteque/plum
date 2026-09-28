@@ -44,10 +44,36 @@ public class ValueObjectsEntitiesTests
     }
 
     [Fact]
-    public void After_ConstructingAnOrderWithAnUnknownStatusIsRejected()
+    public void Before_TheSameOrderComparesUnequalToItselfOnceItsStatusChanges()
     {
-        Assert.Throws<ValueObjectsEntitiesAfter.InvalidStatusTransitionException>(
+        var order = new ValueObjectsEntitiesBefore.Order { Id = 1, Status = "pending", Total = 9.99, Currency = "USD" };
+        var sameOrderAfterCancelling = order with { Status = "cancelled" };
+        Assert.NotEqual(order, sameOrderAfterCancelling);
+    }
+
+    [Fact]
+    public void After_ParsingAnUnknownStatusIsRejected()
+    {
+        Assert.Throws<ValueObjectsEntitiesAfter.UnknownStatusException>(
             () => ValueObjectsEntitiesAfter.OrderStatuses.Parse("definitely-not-a-status"));
+    }
+
+    [Fact]
+    public void After_ShippingAPendingOrderMovesItToShipped()
+    {
+        var order = new ValueObjectsEntitiesAfter.Order(1, ValueObjectsEntitiesAfter.OrderStatus.Pending,
+            new ValueObjectsEntitiesAfter.Money(999, "USD"));
+        order.Ship();
+        Assert.Equal(ValueObjectsEntitiesAfter.OrderStatus.Shipped, order.Status);
+    }
+
+    [Fact]
+    public void After_CancellingAShippedOrderIsRejected()
+    {
+        var order = new ValueObjectsEntitiesAfter.Order(1, ValueObjectsEntitiesAfter.OrderStatus.Pending,
+            new ValueObjectsEntitiesAfter.Money(999, "USD"));
+        order.Ship();
+        Assert.Throws<ValueObjectsEntitiesAfter.InvalidStatusTransitionException>(() => order.Cancel());
     }
 
     [Fact]

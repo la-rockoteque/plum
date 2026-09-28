@@ -5,6 +5,7 @@ import example.valueobjectsentities.after.InvalidStatusTransition
 import example.valueobjectsentities.after.Money
 import example.valueobjectsentities.after.Order
 import example.valueobjectsentities.after.OrderStatus
+import example.valueobjectsentities.after.UnknownStatus
 import example.valueobjectsentities.before.Order as BeforeOrder
 import example.valueobjectsentities.before.addTotals
 import kotlin.test.Test
@@ -43,8 +44,29 @@ class ValueObjectsEntitiesTest {
     }
 
     @Test
-    fun `after - constructing an order with an unknown status is rejected`() {
-        assertFailsWith<InvalidStatusTransition> { OrderStatus.parse("definitely-not-a-status") }
+    fun `before - the same order compares unequal to itself once its status changes`() {
+        val order = BeforeOrder(id = 1, status = "pending", total = 9.99, currency = "USD")
+        val sameOrderAfterCancelling = order.copy(status = "cancelled")
+        assertNotEquals(order, sameOrderAfterCancelling)
+    }
+
+    @Test
+    fun `after - parsing an unknown status is rejected`() {
+        assertFailsWith<UnknownStatus> { OrderStatus.parse("definitely-not-a-status") }
+    }
+
+    @Test
+    fun `after - shipping a pending order moves it to shipped`() {
+        val order = Order(id = 1, status = OrderStatus.PENDING, total = Money(999, "USD"))
+        order.ship()
+        assertEquals(OrderStatus.SHIPPED, order.status)
+    }
+
+    @Test
+    fun `after - cancelling a shipped order is rejected`() {
+        val order = Order(id = 1, status = OrderStatus.PENDING, total = Money(999, "USD"))
+        order.ship()
+        assertFailsWith<InvalidStatusTransition> { order.cancel() }
     }
 
     @Test

@@ -7,15 +7,35 @@ import (
 	"example.com/repository-example/valueobjectsentities/after"
 )
 
-func TestAfter_ConstructingAnOrderWithAnUnknownStatusIsRejected(t *testing.T) {
+func TestAfter_ParsingAnUnknownStatusIsRejected(t *testing.T) {
 	_, err := after.ParseOrderStatus("definitely-not-a-status")
-	if !errors.Is(err, after.ErrInvalidStatusTransition) {
+	if !errors.Is(err, after.ErrUnknownStatus) {
+		t.Fatalf("got %v, want unknown status", err)
+	}
+}
+
+func TestAfter_ShippingAPendingOrderMovesItToShipped(t *testing.T) {
+	order := after.NewOrder(1, after.Pending, after.Money{AmountMinor: 999, Currency: "USD"})
+	if err := order.Ship(); err != nil {
+		t.Fatalf("ship failed: %v", err)
+	}
+	if order.Status() != after.Shipped {
+		t.Fatalf("got status %v, want shipped", order.Status())
+	}
+}
+
+func TestAfter_CancellingAShippedOrderIsRejected(t *testing.T) {
+	order := after.NewOrder(1, after.Pending, after.Money{AmountMinor: 999, Currency: "USD"})
+	if err := order.Ship(); err != nil {
+		t.Fatalf("ship failed: %v", err)
+	}
+	if err := order.Cancel(); !errors.Is(err, after.ErrInvalidStatusTransition) {
 		t.Fatalf("got %v, want invalid status transition", err)
 	}
 }
 
 func TestAfter_CancellingACancelledOrderIsRejected(t *testing.T) {
-	order := after.Order{ID: 1, Status: after.Pending, Total: after.Money{AmountMinor: 999, Currency: "USD"}}
+	order := after.NewOrder(1, after.Pending, after.Money{AmountMinor: 999, Currency: "USD"})
 	if err := order.Cancel(); err != nil {
 		t.Fatalf("first cancel failed: %v", err)
 	}
@@ -25,11 +45,11 @@ func TestAfter_CancellingACancelledOrderIsRejected(t *testing.T) {
 }
 
 func TestAfter_ACancelledOrderCannotMoveBackToPending(t *testing.T) {
-	order := after.Order{ID: 1, Status: after.Pending, Total: after.Money{AmountMinor: 999, Currency: "USD"}}
+	order := after.NewOrder(1, after.Pending, after.Money{AmountMinor: 999, Currency: "USD"})
 	if err := order.Cancel(); err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
-	if _, err := order.Status.TransitionTo(after.Pending); !errors.Is(err, after.ErrInvalidStatusTransition) {
+	if _, err := order.Status().TransitionTo(after.Pending); !errors.Is(err, after.ErrInvalidStatusTransition) {
 		t.Fatalf("got %v, want invalid status transition", err)
 	}
 }
@@ -87,13 +107,13 @@ func TestAfter_MoneyIsImmutable(t *testing.T) {
 
 func TestAfter_TwoOrdersWithEqualFieldsButDifferentIdsAreNotEqual(t *testing.T) {
 	total := after.Money{AmountMinor: 500, Currency: "USD"}
-	orderA := after.Order{ID: 1, Status: after.Pending, Total: total}
-	orderB := after.Order{ID: 2, Status: after.Pending, Total: total}
+	orderA := after.NewOrder(1, after.Pending, total)
+	orderB := after.NewOrder(2, after.Pending, total)
 	if orderA.Equals(orderB) {
 		t.Fatalf("expected orders with different ids to be unequal")
 	}
 
-	orderC := after.Order{ID: 1, Status: after.Pending, Total: total}
+	orderC := after.NewOrder(1, after.Pending, total)
 	if err := orderC.Cancel(); err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}

@@ -7,7 +7,9 @@
   "summary": "A value object is defined by its attributes and is immutable; an entity is defined by its identity and persists through change.",
   "prerequisites": [],
   "related": [
-    "repository"
+    "repository",
+    "aggregates",
+    "tell-dont-ask"
   ],
   "signals": [
     "a domain field typed as a bare string or number for something with a fixed set of legal states (status, type, kind)",
