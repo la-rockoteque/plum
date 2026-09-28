@@ -87,7 +87,7 @@ test("render fills the template, escapes code and text, and keeps the slide engi
   expect(html).toContain('<details class="answer"><summary>Reveal</summary>');
   expect(html).toContain('<aside class="notes">Ask for the prediction again.</aside>');
   expect(html).toContain("<h1>Unit of Work</h1>");
-  expect(html).toContain("function go(i)");                        // engine script kept
+  expect(html).toContain("function go(i, instant)");               // engine script kept
 });
 
 test("render refuses unknown slide kinds and script injection in text", () => {
