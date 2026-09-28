@@ -7,89 +7,115 @@ namespace RepositoryExample.Tests;
 public class LawOfDemeterTests
 {
     [Fact]
-    public void Before_ShippingAndRefundDecisionsWalkTheCustomersAddressAndWalletDirectly()
+    public void Before_RefundAndCustomsDecisionsWalkTheCustomersAddressDirectlyForOrdinaryAddresses()
     {
-        var policy = new LawOfDemeterBefore.CancellationPolicy();
+        var cancellation = new LawOfDemeterBefore.CancellationPolicy();
+        var labels = new LawOfDemeterBefore.ReturnLabelPrinter();
 
         var domestic = new LawOfDemeterBefore.Order
         {
             Customer = new LawOfDemeterBefore.Customer
             {
                 Address = new LawOfDemeterBefore.Address { Country = new LawOfDemeterBefore.Country { Code = "US" } },
-                Wallet = new LawOfDemeterBefore.Wallet { Card = new LawOfDemeterBefore.Card { Expired = false } },
             },
         };
-        Assert.True(policy.ShipsDomestically(domestic));
-        Assert.True(policy.CanAutoRefund(domestic));
+        Assert.True(cancellation.CanAutoRefund(domestic));
+        Assert.False(labels.NeedsCustomsForm(domestic));
 
         var foreign = new LawOfDemeterBefore.Order
         {
             Customer = new LawOfDemeterBefore.Customer
             {
                 Address = new LawOfDemeterBefore.Address { Country = new LawOfDemeterBefore.Country { Code = "CA" } },
-                Wallet = new LawOfDemeterBefore.Wallet { Card = new LawOfDemeterBefore.Card { Expired = true } },
             },
         };
-        Assert.False(policy.ShipsDomestically(foreign));
-        Assert.False(policy.CanAutoRefund(foreign));
+        Assert.False(cancellation.CanAutoRefund(foreign));
+        Assert.True(labels.NeedsCustomsForm(foreign));
     }
 
     [Fact]
-    public void Before_APickupPointAddressWithoutACountryBreaksTheShippingCheck()
+    public void Before_ARegionMigratedDomesticAddressIsWronglyTreatedAsNonDomesticByBothDistantCallers()
     {
-        var policy = new LawOfDemeterBefore.CancellationPolicy();
-        var order = new LawOfDemeterBefore.Order
+        var cancellation = new LawOfDemeterBefore.CancellationPolicy();
+        var labels = new LawOfDemeterBefore.ReturnLabelPrinter();
+
+        var migratedDomestic = new LawOfDemeterBefore.Order
         {
             Customer = new LawOfDemeterBefore.Customer
             {
-                Address = new LawOfDemeterBefore.Address { Country = null },
-                Wallet = new LawOfDemeterBefore.Wallet { Card = new LawOfDemeterBefore.Card { Expired = false } },
+                Address = new LawOfDemeterBefore.Address
+                {
+                    Region = new LawOfDemeterBefore.Region { Country = new LawOfDemeterBefore.Country { Code = "US" } },
+                },
             },
         };
-        Assert.Throws<NullReferenceException>(() => policy.ShipsDomestically(order));
+        // Both callers still only know how to read Address.Country; neither has been taught
+        // about Region, so both get the same, wrong, conservative answer.
+        Assert.False(cancellation.CanAutoRefund(migratedDomestic));
+        Assert.True(labels.NeedsCustomsForm(migratedDomestic));
     }
 
     [Fact]
-    public void After_OrderAsksItsCustomerWhoAsksItsOwnCollaboratorsForTheSameDecisions()
+    public void After_OrderAsksItsCustomerForTheSameRefundAndCustomsDecisions()
     {
-        var policy = new LawOfDemeterAfter.CancellationPolicy();
+        var cancellation = new LawOfDemeterAfter.CancellationPolicy();
+        var labels = new LawOfDemeterAfter.ReturnLabelPrinter();
 
         var domestic = new LawOfDemeterAfter.Order
         {
             Customer = new LawOfDemeterAfter.Customer
             {
                 Address = new LawOfDemeterAfter.Address { Country = new LawOfDemeterAfter.Country { Code = "US" } },
-                Wallet = new LawOfDemeterAfter.Wallet { Card = new LawOfDemeterAfter.Card { Expired = false } },
             },
         };
-        Assert.True(policy.ShipsDomestically(domestic));
-        Assert.True(policy.CanAutoRefund(domestic));
+        Assert.True(cancellation.CanAutoRefund(domestic));
+        Assert.False(labels.NeedsCustomsForm(domestic));
 
         var foreign = new LawOfDemeterAfter.Order
         {
             Customer = new LawOfDemeterAfter.Customer
             {
                 Address = new LawOfDemeterAfter.Address { Country = new LawOfDemeterAfter.Country { Code = "CA" } },
-                Wallet = new LawOfDemeterAfter.Wallet { Card = new LawOfDemeterAfter.Card { Expired = true } },
             },
         };
-        Assert.False(policy.ShipsDomestically(foreign));
-        Assert.False(policy.CanAutoRefund(foreign));
+        Assert.False(cancellation.CanAutoRefund(foreign));
+        Assert.True(labels.NeedsCustomsForm(foreign));
     }
 
     [Fact]
-    public void After_APickupPointAddressWithoutACountryNoLongerBreaksTheShippingCheck()
+    public void After_TheSameCallerCodeAnswersCorrectlyOnceAddressOwnsTheRegionMigratedShape()
     {
-        var policy = new LawOfDemeterAfter.CancellationPolicy();
-        var order = new LawOfDemeterAfter.Order
+        var cancellation = new LawOfDemeterAfter.CancellationPolicy();
+        var labels = new LawOfDemeterAfter.ReturnLabelPrinter();
+
+        var migratedDomestic = new LawOfDemeterAfter.Order
         {
             Customer = new LawOfDemeterAfter.Customer
             {
-                Address = new LawOfDemeterAfter.Address { Country = null },
-                Wallet = new LawOfDemeterAfter.Wallet { Card = new LawOfDemeterAfter.Card { Expired = false } },
+                Address = new LawOfDemeterAfter.Address
+                {
+                    Region = new LawOfDemeterAfter.Region { Country = new LawOfDemeterAfter.Country { Code = "US" } },
+                },
             },
         };
-        Assert.False(policy.ShipsDomestically(order));
-        Assert.True(policy.CanAutoRefund(order));
+        Assert.True(cancellation.CanAutoRefund(migratedDomestic));
+        Assert.False(labels.NeedsCustomsForm(migratedDomestic));
+    }
+
+    [Fact]
+    public void After_APickupPointAddressWithNoCountryOrRegionIsTreatedAsNonDomesticWithoutCrashing()
+    {
+        var cancellation = new LawOfDemeterAfter.CancellationPolicy();
+        var labels = new LawOfDemeterAfter.ReturnLabelPrinter();
+
+        var pickupPoint = new LawOfDemeterAfter.Order
+        {
+            Customer = new LawOfDemeterAfter.Customer
+            {
+                Address = new LawOfDemeterAfter.Address(),
+            },
+        };
+        Assert.False(cancellation.CanAutoRefund(pickupPoint));
+        Assert.True(labels.NeedsCustomsForm(pickupPoint));
     }
 }

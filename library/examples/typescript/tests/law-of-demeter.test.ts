@@ -3,82 +3,77 @@ import { test } from "node:test";
 import {
   Address as AfterAddress,
   CancellationPolicy as AfterCancellationPolicy,
-  Card as AfterCard,
   Country as AfterCountry,
   Customer as AfterCustomer,
   Order as AfterOrder,
-  Wallet as AfterWallet,
+  Region as AfterRegion,
+  ReturnLabelPrinter as AfterReturnLabelPrinter,
 } from "../src/law-of-demeter/after.js";
 import {
-  Address as BeforeAddress,
   CancellationPolicy as BeforeCancellationPolicy,
-  Card as BeforeCard,
-  Country as BeforeCountry,
-  Customer as BeforeCustomer,
   Order as BeforeOrder,
-  Wallet as BeforeWallet,
+  ReturnLabelPrinter as BeforeReturnLabelPrinter,
 } from "../src/law-of-demeter/before.js";
 
-test("before: shipping and refund decisions walk the customers address and wallet directly", () => {
-  const policy = new BeforeCancellationPolicy();
+test("before: refund and customs decisions walk the customers address directly for ordinary addresses", () => {
+  const cancellation = new BeforeCancellationPolicy();
+  const labels = new BeforeReturnLabelPrinter();
 
   const domestic: BeforeOrder = {
-    customer: {
-      address: { country: { code: "US" } },
-      wallet: { card: { expired: false } },
-    },
+    customer: { address: { country: { code: "US" }, region: null } },
   };
-  assert.equal(policy.shipsDomestically(domestic), true);
-  assert.equal(policy.canAutoRefund(domestic), true);
+  assert.equal(cancellation.canAutoRefund(domestic), true);
+  assert.equal(labels.needsCustomsForm(domestic), false);
 
   const foreign: BeforeOrder = {
-    customer: {
-      address: { country: { code: "CA" } },
-      wallet: { card: { expired: true } },
-    },
+    customer: { address: { country: { code: "CA" }, region: null } },
   };
-  assert.equal(policy.shipsDomestically(foreign), false);
-  assert.equal(policy.canAutoRefund(foreign), false);
+  assert.equal(cancellation.canAutoRefund(foreign), false);
+  assert.equal(labels.needsCustomsForm(foreign), true);
 });
 
-test("before: a pickup point address without a country breaks the shipping check", () => {
-  const policy = new BeforeCancellationPolicy();
-  const order: BeforeOrder = {
-    customer: {
-      address: { country: null },
-      wallet: { card: { expired: false } },
-    },
+test("before: a region-migrated domestic address is wrongly treated as non-domestic by both distant callers", () => {
+  const cancellation = new BeforeCancellationPolicy();
+  const labels = new BeforeReturnLabelPrinter();
+
+  const migratedDomestic: BeforeOrder = {
+    customer: { address: { country: null, region: { country: { code: "US" } } } },
   };
-  assert.throws(() => policy.shipsDomestically(order), TypeError);
+  // Both callers still only know how to read `address.country`; neither has been taught
+  // about `region`, so both get the same, wrong, conservative answer.
+  assert.equal(cancellation.canAutoRefund(migratedDomestic), false);
+  assert.equal(labels.needsCustomsForm(migratedDomestic), true);
 });
 
-test("after: order asks its customer who asks its own collaborators for the same decisions", () => {
-  const policy = new AfterCancellationPolicy();
+test("after: order asks its customer for the same refund and customs decisions", () => {
+  const cancellation = new AfterCancellationPolicy();
+  const labels = new AfterReturnLabelPrinter();
 
-  const domestic = new AfterOrder(
-    new AfterCustomer(
-      new AfterAddress(new AfterCountry("US")),
-      new AfterWallet(new AfterCard(false)),
-    ),
-  );
-  assert.equal(policy.shipsDomestically(domestic), true);
-  assert.equal(policy.canAutoRefund(domestic), true);
+  const domestic = new AfterOrder(new AfterCustomer(new AfterAddress(new AfterCountry("US"), null)));
+  assert.equal(cancellation.canAutoRefund(domestic), true);
+  assert.equal(labels.needsCustomsForm(domestic), false);
 
-  const foreign = new AfterOrder(
-    new AfterCustomer(
-      new AfterAddress(new AfterCountry("CA")),
-      new AfterWallet(new AfterCard(true)),
-    ),
-  );
-  assert.equal(policy.shipsDomestically(foreign), false);
-  assert.equal(policy.canAutoRefund(foreign), false);
+  const foreign = new AfterOrder(new AfterCustomer(new AfterAddress(new AfterCountry("CA"), null)));
+  assert.equal(cancellation.canAutoRefund(foreign), false);
+  assert.equal(labels.needsCustomsForm(foreign), true);
 });
 
-test("after: a pickup point address without a country no longer breaks the shipping check", () => {
-  const policy = new AfterCancellationPolicy();
-  const order = new AfterOrder(
-    new AfterCustomer(new AfterAddress(null), new AfterWallet(new AfterCard(false))),
+test("after: the same caller code answers correctly once address owns the region-migrated shape", () => {
+  const cancellation = new AfterCancellationPolicy();
+  const labels = new AfterReturnLabelPrinter();
+
+  const migratedDomestic = new AfterOrder(
+    new AfterCustomer(new AfterAddress(null, new AfterRegion(new AfterCountry("US")))),
   );
-  assert.equal(policy.shipsDomestically(order), false);
-  assert.equal(policy.canAutoRefund(order), true);
+  assert.equal(cancellation.canAutoRefund(migratedDomestic), true);
+  assert.equal(labels.needsCustomsForm(migratedDomestic), false);
+});
+
+test("after: a pickup point address with no country or region is treated as non-domestic without crashing", () => {
+  const cancellation = new AfterCancellationPolicy();
+  const labels = new AfterReturnLabelPrinter();
+
+  const pickupPoint = new AfterOrder(new AfterCustomer(new AfterAddress(null, null)));
+  assert.equal(cancellation.canAutoRefund(pickupPoint), false);
+  assert.equal(labels.needsCustomsForm(pickupPoint), true);
 });

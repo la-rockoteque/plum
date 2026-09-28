@@ -1,69 +1,69 @@
-// Package after: each object only talks to its own data or its direct collaborator; the caller
-// asks Order one question at a time. A pickup point's missing country is absorbed where it
-// lives, in Address, instead of blowing up three hops away.
+// Package after: each object only talks to its own data or its direct collaborator. Address
+// answers "domestic?" for itself whether it still holds a plain country or, after the region
+// migration, a Region one hop further out -- so the callers below never learn the new shape.
 package after
 
 type Country struct {
 	Code string
 }
 
+type Region struct {
+	Country Country
+}
+
+// IsDomestic asks its own direct collaborator, Country.
+func (r Region) IsDomestic() bool {
+	return r.Country.Code == "US"
+}
+
 type Address struct {
-	Country *Country // nil for a pickup point
+	Country *Country
+	Region  *Region
 }
 
-// IsDomestic answers using only its own field.
+// IsDomestic answers using only its own field, whichever shape this address has.
 func (a Address) IsDomestic() bool {
-	return a.Country != nil && a.Country.Code == "US"
-}
-
-type Card struct {
-	Expired bool
-}
-
-func (c Card) IsExpired() bool {
-	return c.Expired
-}
-
-type Wallet struct {
-	Card Card
-}
-
-// HasValidCard asks its own direct collaborator, the card.
-func (w Wallet) HasValidCard() bool {
-	return !w.Card.IsExpired()
+	if a.Region != nil {
+		return a.Region.IsDomestic()
+	}
+	if a.Country != nil {
+		return a.Country.Code == "US"
+	}
+	return false // a pickup point has no single country either
 }
 
 type Customer struct {
 	Address Address
-	Wallet  Wallet
-}
-
-func (c Customer) ShipsDomestically() bool {
-	return c.Address.IsDomestic()
 }
 
 func (c Customer) CanAutoRefund() bool {
-	return c.Wallet.HasValidCard()
+	return c.Address.IsDomestic()
+}
+
+func (c Customer) NeedsCustomsForm() bool {
+	return !c.Address.IsDomestic()
 }
 
 type Order struct {
 	Customer Customer
 }
 
-func (o Order) ReturnsShipDomestically() bool {
-	return o.Customer.ShipsDomestically()
-}
-
 func (o Order) CanAutoRefund() bool {
 	return o.Customer.CanAutoRefund()
 }
 
-type CancellationPolicy struct{}
-
-func (CancellationPolicy) ShipsDomestically(order Order) bool {
-	return order.ReturnsShipDomestically()
+func (o Order) NeedsCustomsForm() bool {
+	return o.Customer.NeedsCustomsForm()
 }
+
+type CancellationPolicy struct{}
 
 func (CancellationPolicy) CanAutoRefund(order Order) bool {
 	return order.CanAutoRefund()
+}
+
+type ReturnLabelPrinter struct{}
+
+func (ReturnLabelPrinter) NeedsCustomsForm(order Order) bool {
+	return order.NeedsCustomsForm()
 }

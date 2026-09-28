@@ -9,37 +9,38 @@
     "coupling-cohesion"
   ],
   "related": [
-    "single-responsibility"
+    "single-responsibility",
+    "tell-dont-ask"
   ],
   "signals": [
     "a call chain three or more objects deep (`a.b().c().d()`) used to reach a single fact",
-    "a non-null assertion or defensive null check inserted only to keep a long chain compiling",
-    "a bug where introducing a new variant of one link in the chain (a different address shape, a moved field) breaks every caller that walked through it",
+    "a defensive null check or conservative fallback added independently in more than one caller so a chain that no longer resolves doesn't crash",
+    "a bug where introducing a new variant of one link in the chain (a different address shape, a moved field) makes every caller that walked through it silently wrong instead of failing loudly",
     "a wrapper method added only to expose another object's internals one level further, so a caller can keep chaining through it"
   ],
   "roles": {
     "Order": "caller that used to walk the whole chain itself; after the fix, asks one question of its direct collaborator",
     "Customer": "the direct collaborator Order actually talks to; forwards each question to whichever object owns the answer",
-    "Address / Wallet": "objects one hop further out that answer the question about themselves once the chain stops passing through them",
-    "Country / Card": "innermost data the original chain reached for; now read by the object that sits right next to it, not by the distant caller"
+    "Address": "the object one hop out that decides domestic-vs-international for itself, whether it still holds a country directly or a region that wraps one",
+    "Region / Country": "the data the original chain reached past several objects to get; Region is the hop the business inserted later, and after the fix it is the only object that has to learn the new shape"
   },
   "stages": [
     {
       "id": "before",
       "title": "Train wreck",
-      "idea": "CancellationPolicy walks order.customer().address().country().code() and order.customer().wallet().card().isExpired() to decide the return method and the refund, reaching through objects it doesn't own to get there."
+      "idea": "CancellationPolicy.canAutoRefund and ReturnLabelPrinter.needsCustomsForm each walk order.customer().address().country().code() directly to decide whether an order is domestic. When the business regroups countries under a Region one hop further out, neither caller — each maintaining its own copy of the chain — knows how to reach the country anymore, and both silently fall back to the same wrong, conservative answer instead of crashing."
     },
     {
       "id": "after",
       "title": "Ask your neighbor",
-      "idea": "Order asks its customer, and each object in turn asks its own direct collaborator; a pickup point's missing country is absorbed inside Address instead of breaking every caller three hops away."
+      "idea": "Order asks its Customer, which asks its Address, which asks its Region if it has one and its Country otherwise; only Address and Region ever learn the new shape, so the same CancellationPolicy and ReturnLabelPrinter code gives the right answer for both the old, flat address and the new, region-wrapped one — and for a pickup point with neither."
     }
   ],
   "checks": [
     "\"Only talk to your immediate friends\" — name the kinds of object a method is allowed to call without violating the Law of Demeter.",
     "Why doesn't a fluent builder chain like `order.items().add(x).add(y)` violate the Law of Demeter the way `order.customer().address().country().code()` does?",
-    "The after version adds a method to Address and to Wallet instead of moving the whole chain into one place. Why does spreading the behaviour across each object, rather than centralizing it in Order, avoid turning Order into a wrapper for everything downstream?",
-    "A test in this concept shows the before code breaking on a pickup point address. What made it break, and why does the after version handle the same input instead of just moving where it breaks?"
+    "The after version adds a method to Address and to Region instead of moving the whole chain into one place. Why does spreading the behaviour across each object, rather than centralizing it in Order, avoid turning Order into a wrapper for everything downstream?",
+    "A region migration moves the country one hop further out, from Address straight to Address -> Region -> Country. In the before version, how many callers have to learn about Region for the refund and customs decisions to stay correct? In the after version, how many? What does that difference cost the day a third caller needs the same fact?"
   ],
   "examples": {
     "python": {

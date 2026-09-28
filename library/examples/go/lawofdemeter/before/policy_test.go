@@ -2,43 +2,40 @@ package before
 
 import "testing"
 
-func TestBefore_ShippingAndRefundDecisionsWalkTheCustomersAddressAndWalletDirectly(t *testing.T) {
-	policy := CancellationPolicy{}
+func TestBefore_RefundAndCustomsDecisionsWalkTheCustomersAddressDirectlyForOrdinaryAddresses(t *testing.T) {
+	cancellation := CancellationPolicy{}
+	labels := ReturnLabelPrinter{}
 
-	domestic := Order{Customer: Customer{
-		Address: Address{Country: &Country{Code: "US"}},
-		Wallet:  Wallet{Card: Card{Expired: false}},
-	}}
-	if !policy.ShipsDomestically(domestic) {
-		t.Fatal("want domestic order to ship domestically")
+	domestic := Order{Customer: Customer{Address: Address{Country: &Country{Code: "US"}}}}
+	if !cancellation.CanAutoRefund(domestic) {
+		t.Fatal("want a domestic order to auto-refund")
 	}
-	if !policy.CanAutoRefund(domestic) {
-		t.Fatal("want domestic order with a valid card to auto-refund")
+	if labels.NeedsCustomsForm(domestic) {
+		t.Fatal("want a domestic order not to need a customs form")
 	}
 
-	foreign := Order{Customer: Customer{
-		Address: Address{Country: &Country{Code: "CA"}},
-		Wallet:  Wallet{Card: Card{Expired: true}},
-	}}
-	if policy.ShipsDomestically(foreign) {
-		t.Fatal("want foreign order not to ship domestically")
+	foreign := Order{Customer: Customer{Address: Address{Country: &Country{Code: "CA"}}}}
+	if cancellation.CanAutoRefund(foreign) {
+		t.Fatal("want a foreign order not to auto-refund")
 	}
-	if policy.CanAutoRefund(foreign) {
-		t.Fatal("want an order with an expired card not to auto-refund")
+	if !labels.NeedsCustomsForm(foreign) {
+		t.Fatal("want a foreign order to need a customs form")
 	}
 }
 
-func TestBefore_APickupPointAddressWithoutACountryBreaksTheShippingCheck(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("want a panic reaching through the missing country, got none")
-		}
-	}()
+func TestBefore_ARegionMigratedDomesticAddressIsWronglyTreatedAsNonDomesticByBothDistantCallers(t *testing.T) {
+	cancellation := CancellationPolicy{}
+	labels := ReturnLabelPrinter{}
 
-	policy := CancellationPolicy{}
-	order := Order{Customer: Customer{
-		Address: Address{Country: nil},
-		Wallet:  Wallet{Card: Card{Expired: false}},
-	}}
-	policy.ShipsDomestically(order)
+	migratedDomestic := Order{Customer: Customer{Address: Address{
+		Region: &Region{Country: Country{Code: "US"}},
+	}}}
+	// Both callers still only know how to read Address.Country; neither has been taught
+	// about Region, so both get the same, wrong, conservative answer.
+	if cancellation.CanAutoRefund(migratedDomestic) {
+		t.Fatal("want the before caller to (wrongly) refuse auto-refund once country moves under region")
+	}
+	if !labels.NeedsCustomsForm(migratedDomestic) {
+		t.Fatal("want the before caller to (wrongly) demand a customs form once country moves under region")
+	}
 }

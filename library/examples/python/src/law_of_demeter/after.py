@@ -1,6 +1,6 @@
-"""Each object only talks to its own data or its direct collaborator; the caller asks Order
-one question at a time. A pickup point's missing country is absorbed where it lives, in
-Address, instead of blowing up three hops away."""
+"""Each object only talks to its own data or its direct collaborator. Address answers
+"domestic?" for itself whether it still holds a plain country or, after the region migration,
+a Region one hop further out -- so the callers below never have to learn the new shape."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -12,55 +12,53 @@ class Country:
 
 
 @dataclass
-class Address:
-    country: Optional[Country]  # None for a pickup point
+class Region:
+    country: Country
 
     def is_domestic(self) -> bool:
-        return self.country is not None and self.country.code == "US"
+        return self.country.code == "US"
 
 
 @dataclass
-class Card:
-    expired: bool
+class Address:
+    country: Optional[Country]
+    region: Optional[Region]
 
-    def is_expired(self) -> bool:
-        return self.expired
-
-
-@dataclass
-class Wallet:
-    card: Card
-
-    def has_valid_card(self) -> bool:
-        return not self.card.is_expired()
+    def is_domestic(self) -> bool:
+        if self.region is not None:
+            return self.region.is_domestic()
+        if self.country is not None:
+            return self.country.code == "US"
+        return False  # a pickup point has no single country either
 
 
 @dataclass
 class Customer:
     address: Address
-    wallet: Wallet
-
-    def ships_domestically(self) -> bool:
-        return self.address.is_domestic()
 
     def can_auto_refund(self) -> bool:
-        return self.wallet.has_valid_card()
+        return self.address.is_domestic()
+
+    def needs_customs_form(self) -> bool:
+        return not self.address.is_domestic()
 
 
 @dataclass
 class Order:
     customer: Customer
 
-    def returns_ship_domestically(self) -> bool:
-        return self.customer.ships_domestically()
-
     def can_auto_refund(self) -> bool:
         return self.customer.can_auto_refund()
 
+    def needs_customs_form(self) -> bool:
+        return self.customer.needs_customs_form()
+
 
 class CancellationPolicy:
-    def ships_domestically(self, order: Order) -> bool:
-        return order.returns_ship_domestically()
-
     def can_auto_refund(self, order: Order) -> bool:
         return order.can_auto_refund()
+
+
+class ReturnLabelPrinter:
+    def needs_customs_form(self, order: Order) -> bool:
+        return order.needs_customs_form()

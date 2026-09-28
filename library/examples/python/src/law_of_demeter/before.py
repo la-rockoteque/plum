@@ -1,6 +1,6 @@
-"""Teaching artifact: cancelling an order walks straight through the customer's address and
-wallet to decide how to ship the return and whether to auto-refund — a train wreck that
-breaks the moment one address turns out not to have a country."""
+"""Teaching artifact: the refund and customs decisions each walk straight through the
+customer's address to read its country -- a train wreck that breaks not by crashing, but by
+silently giving the wrong answer the day the country moves one hop further out."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -12,24 +12,23 @@ class Country:
 
 
 @dataclass
+class Region:
+    """Introduced later: countries are grouped under a customs region."""
+
+    country: Country
+
+
+@dataclass
 class Address:
-    country: Optional[Country]  # None for a pickup point — no single country's customs apply
-
-
-@dataclass
-class Card:
-    expired: bool
-
-
-@dataclass
-class Wallet:
-    card: Card
+    # Exactly one of these is set: `country` for an address created before the region
+    # migration, `region` for one created after it. Neither caller below knows about `region`.
+    country: Optional[Country]
+    region: Optional[Region]
 
 
 @dataclass
 class Customer:
     address: Address
-    wallet: Wallet
 
 
 @dataclass
@@ -38,10 +37,18 @@ class Order:
 
 
 class CancellationPolicy:
-    def ships_domestically(self, order: Order) -> bool:
-        # Train wreck: order -> customer -> address -> country -> code.
-        return order.customer.address.country.code == "US"
-
     def can_auto_refund(self, order: Order) -> bool:
-        # Train wreck: order -> customer -> wallet -> card -> expired.
-        return not order.customer.wallet.card.expired
+        # Train wreck: order -> customer -> address -> country -> code.
+        address = order.customer.address
+        if address.country is None:
+            return False  # play it safe: no auto-refund if we can't read a country
+        return address.country.code == "US"
+
+
+class ReturnLabelPrinter:
+    def needs_customs_form(self, order: Order) -> bool:
+        # Train wreck: order -> customer -> address -> country -> code.
+        address = order.customer.address
+        if address.country is None:
+            return True  # play it safe: assume a customs form is needed
+        return address.country.code != "US"

@@ -2,42 +2,51 @@ package after
 
 import "testing"
 
-func TestAfter_OrderAsksItsCustomerWhoAsksItsOwnCollaboratorsForTheSameDecisions(t *testing.T) {
-	policy := CancellationPolicy{}
+func TestAfter_OrderAsksItsCustomerForTheSameRefundAndCustomsDecisions(t *testing.T) {
+	cancellation := CancellationPolicy{}
+	labels := ReturnLabelPrinter{}
 
-	domestic := Order{Customer: Customer{
-		Address: Address{Country: &Country{Code: "US"}},
-		Wallet:  Wallet{Card: Card{Expired: false}},
-	}}
-	if !policy.ShipsDomestically(domestic) {
-		t.Fatal("want domestic order to ship domestically")
+	domestic := Order{Customer: Customer{Address: Address{Country: &Country{Code: "US"}}}}
+	if !cancellation.CanAutoRefund(domestic) {
+		t.Fatal("want a domestic order to auto-refund")
 	}
-	if !policy.CanAutoRefund(domestic) {
-		t.Fatal("want domestic order with a valid card to auto-refund")
+	if labels.NeedsCustomsForm(domestic) {
+		t.Fatal("want a domestic order not to need a customs form")
 	}
 
-	foreign := Order{Customer: Customer{
-		Address: Address{Country: &Country{Code: "CA"}},
-		Wallet:  Wallet{Card: Card{Expired: true}},
-	}}
-	if policy.ShipsDomestically(foreign) {
-		t.Fatal("want foreign order not to ship domestically")
+	foreign := Order{Customer: Customer{Address: Address{Country: &Country{Code: "CA"}}}}
+	if cancellation.CanAutoRefund(foreign) {
+		t.Fatal("want a foreign order not to auto-refund")
 	}
-	if policy.CanAutoRefund(foreign) {
-		t.Fatal("want an order with an expired card not to auto-refund")
+	if !labels.NeedsCustomsForm(foreign) {
+		t.Fatal("want a foreign order to need a customs form")
 	}
 }
 
-func TestAfter_APickupPointAddressWithoutACountryNoLongerBreaksTheShippingCheck(t *testing.T) {
-	policy := CancellationPolicy{}
-	order := Order{Customer: Customer{
-		Address: Address{Country: nil},
-		Wallet:  Wallet{Card: Card{Expired: false}},
-	}}
-	if policy.ShipsDomestically(order) {
-		t.Fatal("want a pickup point address to ship non-domestically, not panic")
+func TestAfter_TheSameCallerCodeAnswersCorrectlyOnceAddressOwnsTheRegionMigratedShape(t *testing.T) {
+	cancellation := CancellationPolicy{}
+	labels := ReturnLabelPrinter{}
+
+	migratedDomestic := Order{Customer: Customer{Address: Address{
+		Region: &Region{Country: Country{Code: "US"}},
+	}}}
+	if !cancellation.CanAutoRefund(migratedDomestic) {
+		t.Fatal("want the after caller to correctly auto-refund once address owns the region shape")
 	}
-	if !policy.CanAutoRefund(order) {
-		t.Fatal("want a valid card to still auto-refund")
+	if labels.NeedsCustomsForm(migratedDomestic) {
+		t.Fatal("want the after caller to correctly skip the customs form once address owns the region shape")
+	}
+}
+
+func TestAfter_APickupPointAddressWithNoCountryOrRegionIsTreatedAsNonDomesticWithoutCrashing(t *testing.T) {
+	cancellation := CancellationPolicy{}
+	labels := ReturnLabelPrinter{}
+
+	pickupPoint := Order{Customer: Customer{Address: Address{}}}
+	if cancellation.CanAutoRefund(pickupPoint) {
+		t.Fatal("want a pickup point address not to auto-refund")
+	}
+	if !labels.NeedsCustomsForm(pickupPoint) {
+		t.Fatal("want a pickup point address to need a customs form")
 	}
 }

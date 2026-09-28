@@ -1,68 +1,68 @@
-// Each object only talks to its own data or its direct collaborator; the caller asks Order one
-// question at a time. A pickup point's missing country is absorbed where it lives, in Address,
-// instead of blowing up three hops away.
+// Each object only talks to its own data or its direct collaborator. Address answers
+// "domestic?" for itself whether it still holds a plain country or, after the region
+// migration, a Region one hop further out -- so the callers below never learn the new shape.
 
 export class Country {
   constructor(public readonly code: string) {}
 }
 
-export class Address {
-  constructor(public readonly country: Country | null) {} // null for a pickup point
+export class Region {
+  constructor(public readonly country: Country) {}
 
   isDomestic(): boolean {
-    return this.country !== null && this.country.code === "US";
+    return this.country.code === "US";
   }
 }
 
-export class Card {
-  constructor(public readonly expired: boolean) {}
+export class Address {
+  constructor(
+    public readonly country: Country | null,
+    public readonly region: Region | null,
+  ) {}
 
-  isExpired(): boolean {
-    return this.expired;
-  }
-}
-
-export class Wallet {
-  constructor(public readonly card: Card) {}
-
-  hasValidCard(): boolean {
-    return !this.card.isExpired();
+  isDomestic(): boolean {
+    if (this.region !== null) {
+      return this.region.isDomestic();
+    }
+    if (this.country !== null) {
+      return this.country.code === "US";
+    }
+    return false; // a pickup point has no single country either
   }
 }
 
 export class Customer {
-  constructor(
-    public readonly address: Address,
-    public readonly wallet: Wallet,
-  ) {}
+  constructor(public readonly address: Address) {}
 
-  shipsDomestically(): boolean {
+  canAutoRefund(): boolean {
     return this.address.isDomestic();
   }
 
-  canAutoRefund(): boolean {
-    return this.wallet.hasValidCard();
+  needsCustomsForm(): boolean {
+    return !this.address.isDomestic();
   }
 }
 
 export class Order {
   constructor(public readonly customer: Customer) {}
 
-  returnsShipDomestically(): boolean {
-    return this.customer.shipsDomestically();
-  }
-
   canAutoRefund(): boolean {
     return this.customer.canAutoRefund();
+  }
+
+  needsCustomsForm(): boolean {
+    return this.customer.needsCustomsForm();
   }
 }
 
 export class CancellationPolicy {
-  shipsDomestically(order: Order): boolean {
-    return order.returnsShipDomestically();
-  }
-
   canAutoRefund(order: Order): boolean {
     return order.canAutoRefund();
+  }
+}
+
+export class ReturnLabelPrinter {
+  needsCustomsForm(order: Order): boolean {
+    return order.needsCustomsForm();
   }
 }
