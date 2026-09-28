@@ -1,0 +1,115 @@
+{
+  "id": "coupling-cohesion",
+  "title": "Coupling and Cohesion",
+  "category": "principles",
+  "domain": "architecture",
+  "level": "foundation",
+  "summary": "When a service reaches into another object's fields to decide something, that knowledge belongs with the object instead.",
+  "prerequisites": [],
+  "related": [
+    "dependency-inversion"
+  ],
+  "signals": [
+    "a method in one class reading three or more fields of another class to make a decision",
+    "the same interpretation of another object's data duplicated in more than one method or class",
+    "a bug where one copy of a duplicated rule was updated and another copy was not",
+    "long parameter lists or field chains built from a single collaborator's data instead of passing that collaborator"
+  ],
+  "roles": {
+    "OrderService": "collaborator that reaches into another object's data (feature envy)",
+    "Customer": "object that owns the data — and, after the fix, the behaviour about it",
+    "cancellationDiscount": "narrow method the collaborator calls instead of reading fields directly",
+    "tier / lifetimeSpend / yearsAsMember": "internal representation that should be the owning object's own business"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Feature envy",
+      "idea": "OrderService reaches into Customer's tier, spend and membership length to price a cancellation, then copies the same rule again for a receipt line."
+    },
+    {
+      "id": "after",
+      "title": "Behaviour moves to its data",
+      "idea": "Customer answers its own question — what discount do I get? — and OrderService collaborates through that one narrow method."
+    }
+  ],
+  "checks": [
+    "What is coupling, and what is cohesion — and how are they different measurements of the same design?",
+    "Why does moving the discount rule into Customer lower coupling without making the two classes independent of each other?",
+    "Is zero coupling between classes an achievable or even desirable goal? Why or why not?",
+    "What is connascence, and how does it make 'coupling' more precise than a single word?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/coupling_cohesion/before.py"
+        ],
+        "after": [
+          "src/coupling_cohesion/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_coupling_cohesion.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_coupling_cohesion.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/coupling-cohesion/before.ts"
+        ],
+        "after": [
+          "src/coupling-cohesion/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/coupling-cohesion.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/coupling-cohesion.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "couplingcohesion/before/service.go"
+        ],
+        "after": [
+          "couplingcohesion/after/service.go"
+        ]
+      },
+      "tests": [
+        "couplingcohesion/before/service_test.go",
+        "couplingcohesion/after/service_test.go"
+      ],
+      "run": "go test ./couplingcohesion/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/CouplingCohesion/Before/Service.cs"
+        ],
+        "after": [
+          "RepositoryExample/CouplingCohesion/After/Service.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/CouplingCohesionTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.CouplingCohesionTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/couplingcohesion/before/Service.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/couplingcohesion/after/Service.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/CouplingCohesionTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.CouplingCohesionTest'"
+    }
+  }
+}
