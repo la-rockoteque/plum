@@ -1,0 +1,47 @@
+import sqlite3
+from dataclasses import replace
+
+from layered_architecture.after.domain import Order, OrderStatus
+
+
+class InMemoryOrderRepository:
+    """Data-layer adapter for tests and demos: same contract, no database."""
+
+    def __init__(self) -> None:
+        self.orders: dict[int, Order] = {}
+
+    def get(self, order_id: int) -> Order | None:
+        order = self.orders.get(order_id)
+        return replace(order) if order is not None else None
+
+    def save(self, order: Order) -> None:
+        self.orders[order.id] = replace(order)
+
+
+def initialize_schema(connection: sqlite3.Connection) -> None:
+    with connection:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS orders "
+            "(id INTEGER PRIMARY KEY, status TEXT NOT NULL)"
+        )
+
+
+class SqliteOrderRepository:
+    """Data-layer adapter over SQLite. Caller owns the connection."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self.connection = connection
+
+    def get(self, order_id: int) -> Order | None:
+        row = self.connection.execute(
+            "SELECT id, status FROM orders WHERE id = ?", (order_id,)
+        ).fetchone()
+        return Order(row[0], OrderStatus(row[1])) if row is not None else None
+
+    def save(self, order: Order) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO orders (id, status) VALUES (?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET status = excluded.status",
+                (order.id, order.status.value),
+            )

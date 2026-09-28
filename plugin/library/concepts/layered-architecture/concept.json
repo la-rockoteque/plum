@@ -1,0 +1,138 @@
+{
+  "id": "layered-architecture",
+  "title": "Layered architecture",
+  "category": "architecture",
+  "domain": "architecture",
+  "level": "foundation",
+  "summary": "Split a use case into presentation, application, domain and data layers so each can be read, tested and changed on its own.",
+  "prerequisites": [],
+  "related": [
+    "repository",
+    "dependency-inversion"
+  ],
+  "signals": [
+    "a single function or class that parses input, applies a business rule and issues SQL",
+    "a business-rule test that must build a request object and a database to run at all",
+    "SQL or table/column names sitting next to validation or business logic",
+    "a rule change and a column rename both forcing an edit to the same function"
+  ],
+  "roles": {
+    "CancelRequest": "presentation: raw, unvalidated request record",
+    "handleCancelRequest": "presentation: parses the request into a command, calls the application layer, shapes a response",
+    "CancelResponse": "presentation: response record",
+    "CancelOrder": "application: service that loads the aggregate, calls domain behaviour, and saves it",
+    "Order.cancel()": "domain: state transition that enforces the invariant",
+    "OrderRepository": "port: persistence contract owned by the application layer (get / save)",
+    "SqliteOrderRepository": "data: adapter over a real store, implementing the application's port",
+    "InMemoryOrderRepository": "data: test/demo adapter honouring the same contract"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Coupled",
+      "idea": "One function parses the request, applies the cancellation rule and runs SQL. Testing the rule needs a request record and a database."
+    },
+    {
+      "id": "after",
+      "title": "Layered",
+      "idea": "Presentation parses a request into a command and shapes a response; application orchestrates; domain owns the rule; data implements the application's repository port. Each layer is tested at its own level, plus one integration test through all four."
+    }
+  ],
+  "checks": [
+    "Why does the presentation layer depend on the application layer's abstraction instead of a concrete class, and what does that let the handler's test skip?",
+    "Who owns the repository port here — the application layer or the data layer — and why does that ownership matter?",
+    "What's the difference between an application service that only forwards to the domain (an anemic service layer) and one that holds real orchestration logic?",
+    "When is a single function like the before stage's the right amount of layering, and when does it stop paying for itself?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/layered_architecture/before.py"
+        ],
+        "after": [
+          "src/layered_architecture/after/domain.py",
+          "src/layered_architecture/after/application.py",
+          "src/layered_architecture/after/data.py",
+          "src/layered_architecture/after/presentation.py"
+        ]
+      },
+      "tests": [
+        "tests/test_layered_architecture.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_layered_architecture.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/layered-architecture/before.ts"
+        ],
+        "after": [
+          "src/layered-architecture/after/domain.ts",
+          "src/layered-architecture/after/application.ts",
+          "src/layered-architecture/after/data.ts",
+          "src/layered-architecture/after/presentation.ts"
+        ]
+      },
+      "tests": [
+        "tests/layered-architecture.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/layered-architecture.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "layeredarchitecture/before/before.go"
+        ],
+        "after": [
+          "layeredarchitecture/after/domain.go",
+          "layeredarchitecture/after/application.go",
+          "layeredarchitecture/after/data.go",
+          "layeredarchitecture/after/presentation.go"
+        ]
+      },
+      "tests": [
+        "layeredarchitecture/before/before_test.go",
+        "layeredarchitecture/after/domain_test.go",
+        "layeredarchitecture/after/application_test.go",
+        "layeredarchitecture/after/presentation_test.go",
+        "layeredarchitecture/after/integration_test.go"
+      ],
+      "run": "go test ./layeredarchitecture/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/LayeredArchitecture/Before/CancelOrderHandler.cs"
+        ],
+        "after": [
+          "RepositoryExample/LayeredArchitecture/After/Domain.cs",
+          "RepositoryExample/LayeredArchitecture/After/Application.cs",
+          "RepositoryExample/LayeredArchitecture/After/Data.cs",
+          "RepositoryExample/LayeredArchitecture/After/Presentation.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/LayeredArchitectureTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.LayeredArchitectureTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/layeredarchitecture/before/BeforeHandler.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/layeredarchitecture/after/Domain.kt",
+          "src/main/kotlin/example/layeredarchitecture/after/Application.kt",
+          "src/main/kotlin/example/layeredarchitecture/after/Data.kt",
+          "src/main/kotlin/example/layeredarchitecture/after/Presentation.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/LayeredArchitectureTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.LayeredArchitectureTest'"
+    }
+  }
+}
