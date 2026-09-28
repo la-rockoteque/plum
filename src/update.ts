@@ -13,13 +13,13 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from "fs";
 import { join } from "path";
 import { getConfig, type UpdateMode } from "./config.js";
-import { HOME, PLUM_DATA_DIR, PLUM_REPO_DIR } from "./env.js";
+import { HOME, PLUM_DATA_DIR, PLUGIN_ROOT } from "./env.js";
 
 const STATE_PATH = join(PLUM_DATA_DIR, "update-state.json");
 const LS_REMOTE_TIMEOUT_MS = 3_000;
 const HOUR_MS = 3_600_000;
 
-export const pluginRoot = () => process.env.PLUM_PLUGIN_ROOT ?? PLUM_REPO_DIR;
+export const pluginRoot = () => PLUGIN_ROOT;
 const pluginsDir = () => process.env.CLAUDE_CODE_PLUGIN_CACHE_DIR
   ?? join(process.env.CLAUDE_CONFIG_DIR ?? join(HOME, ".claude"), "plugins");
 
@@ -104,7 +104,7 @@ function readJson(path: string): unknown {
   try { return JSON.parse(readFileSync(path, "utf-8")); } catch { return null; }
 }
 
-function currentInstall(): (Install & { url: string | null }) | null {
+export function currentInstall(): (Install & { url: string | null }) | null {
   const install = findInstall(readJson(join(pluginsDir(), "installed_plugins.json")), pluginRoot());
   if (!install) return null;
   return { ...install, url: marketplaceUrl(readJson(join(pluginsDir(), "known_marketplaces.json")), install.marketplace) };

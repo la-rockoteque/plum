@@ -38,8 +38,16 @@ If the repo is empty or unrelated to the concept, bind to the canonical example 
 ## 3. Choose the example language
 
 Use `examples.<lang>` matching the repo's primary language (TypeScript for JS projects, Kotlin for Java). If none
-matches, pick the closest in paradigm. Read the stage files and tests from
-`${CLAUDE_PLUGIN_ROOT}/library/examples/<lang>/<path>` — quote from them, trimmed to what the slide needs.
+matches, pick the closest in paradigm. Example code isn't installed with the plugin; fetch just this concept's
+files for that language (cached locally, a few KB):
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/plum" library fetch <concept-id> --lang <lang>
+```
+
+The first output line is the directory; the following lines are the stage and test files, relative to it. Read
+them there and quote from them, trimmed to what the slide needs. If the fetch fails (offline, no access), teach
+from CONCEPT.md alone and say on the title slide that the code examples couldn't be loaded.
 
 ## 4. Write the deck
 
@@ -61,8 +69,8 @@ Arc (12–18 slides; drop what doesn't apply, never pad):
 8. **tradeoff** — when not to, costs, what it doesn't solve (from CONCEPT.md).
 9. **misconceptions** — as a slide of kind `idea`.
 10. **quiz** — the manifest's `checks`, each with a `<details class="answer">`; answers reference their code.
-11. **exercise** — one concrete change they could make in *their* repo (file paths), plus how to run the
-    canonical example: `cd ${CLAUDE_PLUGIN_ROOT}/library/examples/<lang> && <examples.<lang>.run>`.
+11. **exercise** — one concrete change they could make in *their* repo (file paths), plus where to read the
+    canonical example and its `run` command from the manifest (it runs inside Plum's repository checkout).
 12. **recap** — three takeaways; revisit the opening prediction.
 
 Put speaker notes (`<aside class="notes">`) on slides where a presenter would need context.

@@ -126,6 +126,7 @@ bin/plum wipe --confirm       # delete all local data
 bin/plum feedback --kind feature --message "…"   # print a pre-filled feedback link (--open to open it)
 bin/plum stats status         # opt-in usage statistics: status | summary | verdicts | send | clear
 bin/plum update [--apply]     # check for a newer Plum now (and install it)
+bin/plum library status       # streamed example cache: fetch <concept> [--lang L] | status | gc | keep | clear
 bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
 ```
 
@@ -165,6 +166,11 @@ personal or local file can turn `telemetry.enabled` (and `telemetry.debug`) on; 
     "enabled": true,
     "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     "entryId": "entry.1018508464"      // the form's paragraph field
+  },
+  "library": {                         // example code streamed on demand (docs/library-cache.md)
+    "cacheMaxMb": 25,
+    "cacheTtlDays": 30,
+    "keepAfterUses": 3                 // concepts fetched this often stay cached
   },
   "updates": {
     "mode": "prompt",                  // "prompt" | "silent" (personal/local only) | "off"

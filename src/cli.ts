@@ -32,6 +32,7 @@ import { loadConcepts, formatConceptList, LIBRARY_DIR } from "./library.js";
 import { record, recordError, runStatsCommand, type UsageData } from "./telemetry.js";
 import { runFeedbackCommand }                         from "./feedback.js";
 import { runUpdateCheck, runUpdateCommand }           from "./update.js";
+import { runLibraryCommand }                          from "./library-cache.js";
 import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
 import { join }                                       from "path";
@@ -52,7 +53,7 @@ async function readStdin(): Promise<Record<string, unknown>> {
 
 async function main(): Promise<void> {
   const cfg = getConfig();
-  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "update", "update-check", "help"].includes(command)) return;
+  if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "library", "update", "update-check", "help"].includes(command)) return;
 
   switch (command) {
     case "pre-tool":     return handlePreTool();
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
     case "concepts":     return listConcepts(process.argv[3] === "--json");
     case "feedback":     { process.exitCode = await runFeedbackCommand(process.argv.slice(3)); return; }
     case "stats":        { process.exitCode = await runStatsCommand(process.argv.slice(3)); return; }
+    case "library":      { process.exitCode = runLibraryCommand(process.argv.slice(3)); return; }
     case "mcp":          { await import("./mcp-server.js"); return; }
     case "install":      return console.log(INSTALL_HELP);
     case "uninstall":    return uninstallHooks();
@@ -98,6 +100,7 @@ Plum — Professor Plum cognitive atrophy harness
     reset-scores  reset all skill scores to 50
     wipe          delete all data in ~/.plum/ (irreversible)
     concepts      list the concept library (--json for the full manifests)
+    library       example code on demand: fetch <concept> [--lang L] | status | gc | keep | unkeep | clear
     feedback      build a pre-filled feedback form link (--kind feature|bug|feedback --message …
                   [--why …] [--contact …] [--no-context] [--open]); you submit it yourself
     stats         opt-in usage statistics: status | summary [--days N] [--json] | verdicts <json> |

@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { PLUM_REPO_DIR } from "./env.js";
+import { PLUGIN_ROOT } from "./env.js";
 
-export const LIBRARY_DIR = join(PLUM_REPO_DIR, "library");
+export const LIBRARY_DIR = join(PLUGIN_ROOT, "library");
 
 export const CATEGORIES = ["principles", "testing", "architecture", "backend", "frontend", "infra", "refactoring", "security"] as const;
 export const DOMAINS    = ["implementation", "debugging", "testing", "architecture", "synthesis"] as const;

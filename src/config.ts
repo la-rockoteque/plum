@@ -24,6 +24,13 @@ export interface PlumConfig {
     formUrl: string;      // https Google Form "viewform" URL
     entryId: string;      // the paragraph field that receives the text, "entry.<digits>"
   };
+  library: {
+    repoUrl?: string;     // where example code is streamed from; defaults to the marketplace's git URL
+    ref: string;          // used when the installed commit is unknown
+    cacheMaxMb: number;
+    cacheTtlDays: number;
+    keepAfterUses: number; // concepts fetched this many times stay cached regardless of size/age
+  };
   updates: {
     mode: UpdateMode;     // "silent" only from a personal/local layer (see resolveConfig)
     checkIntervalHours: number;
@@ -60,6 +67,12 @@ export const DEFAULTS: PlumConfig = {
     formUrl: "https://docs.google.com/forms/d/e/1FAIpQLScqThybRTWZfcqaKSlTGzE2uPhKo5rhg47YYKbJGmxir_VLlg/viewform",
     entryId: "entry.1018508464"
   },
+  library: {
+    ref: "main",
+    cacheMaxMb: 25,
+    cacheTtlDays: 30,
+    keepAfterUses: 3
+  },
   updates: {
     mode: "prompt",
     checkIntervalHours: 12
@@ -71,7 +84,8 @@ export const DEFAULTS: PlumConfig = {
   }
 };
 
-type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates">> & {
+type Layer = Partial<Omit<PlumConfig, "thresholds" | "domains" | "feedback" | "telemetry" | "updates" | "library">> & {
+  library?: Partial<PlumConfig["library"]>;
   updates?: Partial<PlumConfig["updates"]>;
   thresholds?: Partial<PlumConfig["thresholds"]>;
   domains?: Record<string, boolean>;
@@ -95,6 +109,7 @@ export function resolveConfig({ shared = {}, personal = {}, local = {} }: Config
     thresholds: { ...acc.thresholds, ...l.thresholds },
     domains:    { ...acc.domains,    ...l.domains },
     feedback:   { ...acc.feedback,   ...l.feedback },
+    library:    { ...acc.library,    ...l.library },
     telemetry:  acc.telemetry,
     updates:    acc.updates
   }), DEFAULTS);

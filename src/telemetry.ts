@@ -21,7 +21,7 @@ const DAY_MS    = 86_400_000;
 // Only these names can appear as `tool`. Anything else is recorded as "other".
 const TOOLS = new Set([
   "pre-tool", "post-tool", "user-prompt", "session-end", "skill-health", "status", "predict", "verify",
-  "export", "reset-scores", "wipe", "concepts", "feedback", "verdict", "update-check", "update",
+  "export", "reset-scores", "wipe", "concepts", "feedback", "verdict", "update-check", "update", "library",
   "mcp-get_skill_context", "mcp-log_explanation", "mcp-log_independence", "mcp-get_weekly_status"
 ]);
 const COUNT_KEY = /^[a-z][a-z0-9_]{0,48}$/;
