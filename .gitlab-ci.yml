@@ -9,6 +9,8 @@ default:
 
 plum:
   image: oven/bun:1
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null   # tests and survey shell out to git
   script:
     - bun install --frozen-lockfile
     - bun test plugin/src
