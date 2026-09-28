@@ -1,0 +1,120 @@
+{
+  "id": "domain-events",
+  "title": "Domain events",
+  "category": "architecture",
+  "domain": "architecture",
+  "level": "intermediate",
+  "summary": "Record what happened inside the aggregate as an immutable event, and let independent handlers react to it after the save succeeds, instead of the aggregate calling every reaction inline.",
+  "prerequisites": [
+    "aggregates",
+    "unit-of-work"
+  ],
+  "related": [
+    "cqrs"
+  ],
+  "signals": [
+    "a domain method (cancel, ship, approve) that calls a mailer, a notifier or another aggregate's repository directly",
+    "an aggregate's constructor or method taking three or more unrelated service dependencies just to change its own state",
+    "adding a new side effect to a business rule means editing the method that already has several unrelated ones in it",
+    "a partial failure where one side effect (inventory released, a row written) happened but a sibling one (the status change, the email) didn't"
+  ],
+  "roles": {
+    "Order.cancel() (before)": "changes state and calls every reaction inline, in one method",
+    "InventoryService / Mailer / LoyaltyLedger (before)": "unrelated collaborators the aggregate must import and hold just to call them",
+    "OrderCancelled (after)": "an immutable record of a fact that already happened — a noun, past tense, no behaviour",
+    "Order.cancel() (after)": "changes state and records the event; calls no one",
+    "EventDispatcher (after)": "the list of handlers per event type; runs after the aggregate is saved",
+    "ReleaseInventoryHandler / SendCancellationEmailHandler / RecordLoyaltyCancellationHandler (after)": "independent reactions, each testable alone, each addable without touching Order"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "The aggregate calls its own side effects",
+      "idea": "cancel() releases inventory, emails the customer and appends to a loyalty ledger inline; a failing step aborts the rest, and the method can't be exercised without wiring all three collaborators."
+    },
+    {
+      "id": "after",
+      "title": "cancel() records a fact; handlers react to it",
+      "idea": "cancel() only changes state and appends an OrderCancelled event; the application service saves the order, then dispatches the recorded events to independently-registered handlers."
+    }
+  ],
+  "checks": [
+    "Why does calling the mailer and the loyalty ledger directly from cancel() couple the aggregate to things that have nothing to do with its own invariants?",
+    "What is the difference between a domain event and a command, and why is OrderCancelled named in the past tense?",
+    "Why must the aggregate be saved before its events are dispatched, rather than the other way around?",
+    "If a handler throws partway through dispatch, what state is the system left in, and why does a real system need an outbox to make that reliable?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/domain_events/before.py"
+        ],
+        "after": [
+          "src/domain_events/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_domain_events.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_domain_events.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/domain-events/before.ts"
+        ],
+        "after": [
+          "src/domain-events/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/domain-events.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/domain-events.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "domainevents/before/order.go"
+        ],
+        "after": [
+          "domainevents/after/order.go"
+        ]
+      },
+      "tests": [
+        "domainevents/before/order_test.go",
+        "domainevents/after/order_test.go"
+      ],
+      "run": "go test ./domainevents/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/DomainEvents/Before/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/DomainEvents/After/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/DomainEventsTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.DomainEventsTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/domainevents/before/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/domainevents/after/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/DomainEventsTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.DomainEventsTest'"
+    }
+  }
+}
