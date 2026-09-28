@@ -42,3 +42,11 @@ examples:kotlin:
   script:
     - cd library/examples/kotlin
     - ./gradlew test --no-daemon
+
+examples:react:
+  image: node:22
+  script:
+    - cd library/examples/react
+    - npm ci
+    - npm test
+    - npm run typecheck
