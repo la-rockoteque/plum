@@ -1,0 +1,121 @@
+{
+  "id": "interface-segregation",
+  "title": "Interface Segregation Principle",
+  "category": "principles",
+  "domain": "architecture",
+  "level": "intermediate",
+  "summary": "Give each client its own small, role-shaped interface instead of one fat contract everyone depends on and few fully use.",
+  "prerequisites": [
+    "single-responsibility",
+    "repository"
+  ],
+  "related": [
+    "test-doubles",
+    "dependency-inversion"
+  ],
+  "signals": [
+    "a fake or mock implementation full of methods that throw \"not implemented\" or \"not used\"",
+    "one repository/service interface with a dozen methods used by many unrelated callers",
+    "adding a method to a shared interface forces edits to test doubles that never call it",
+    "a client importing an interface and using only two of its eight methods"
+  ],
+  "roles": {
+    "OrderStoreV1 / OrderStoreV2": "the fat interface: a persistence contract that grows CRUD-plus-reporting methods over time",
+    "CancelOrder": "use case / client that depends on the store but only calls two of its methods",
+    "FakeOrderStoreV1 / FakeOrderStoreV2": "test double forced to stub every unused method of the fat interface, growing when the interface grows",
+    "CancelOrderStore": "client-owned role interface: exactly what CancelOrder needs",
+    "OrderArchiver": "a second, unrelated role interface for a different client",
+    "OrderStoreAdapter": "concrete adapter implementing several role interfaces at once"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Fat interface",
+      "idea": "CancelOrder depends on a seven-method persistence contract but only calls get and save. Its test fake must implement all seven, five of them throwing \"not used\". Growing the interface by one method (archive) forces the fake to grow too, even though CancelOrder itself never changed."
+    },
+    {
+      "id": "after",
+      "title": "Role interfaces",
+      "idea": "CancelOrder depends on a two-method role interface declared next to it. Its fake has exactly two methods, both real. A separate role interface covers archiving; the concrete adapter implements both, but adding that role never touches CancelOrder or its fake."
+    }
+  ],
+  "checks": [
+    "Why does the fake for the fat interface need five methods that raise \"not used\", and whose problem is that -- the fake's, or the interface's?",
+    "The eighth method (archive) was added for a feature that has nothing to do with cancelling an order. Why did the cancel-order test's fake still have to change?",
+    "Who decides the shape of a role interface -- the client that depends on it, or the class that implements it -- and why does that ownership matter?",
+    "What stops this principle from being taken so far that every method gets its own interface, and why would that be a bad trade?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/interface_segregation/before.py"
+        ],
+        "after": [
+          "src/interface_segregation/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_interface_segregation.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_interface_segregation.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/interface-segregation/before.ts"
+        ],
+        "after": [
+          "src/interface-segregation/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/interface-segregation.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/interface-segregation.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "interfacesegregation/before/order.go"
+        ],
+        "after": [
+          "interfacesegregation/after/order.go"
+        ]
+      },
+      "tests": [
+        "interfacesegregation/before/order_test.go",
+        "interfacesegregation/after/order_test.go"
+      ],
+      "run": "go test ./interfacesegregation/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/InterfaceSegregation/Before/CancelOrder.cs"
+        ],
+        "after": [
+          "RepositoryExample/InterfaceSegregation/After/CancelOrder.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/InterfaceSegregationTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.InterfaceSegregationTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/interfacesegregation/before/CancelOrder.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/interfacesegregation/after/CancelOrder.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/InterfaceSegregationTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.InterfaceSegregationTest'"
+    }
+  }
+}
