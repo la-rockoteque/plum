@@ -69,16 +69,20 @@ patterns also ask for permission before the tool runs.
 
 Plum ships as a Claude Code plugin; this repo is its own marketplace. Requires [Bun](https://bun.sh) 1.x.
 
-```text
-/plugin marketplace add /path/to/Plum        # or <github-owner>/<repo>
-/plugin install plum@plum
+```sh
+claude plugin marketplace add git@git.nexapptech.com:vbernier/plum.git --sparse .claude-plugin plugin
+claude plugin install plum@plum            # add --scope project to enable it for one repo only
 ```
+
+(or `/plugin marketplace add …` and `/plugin install plum@plum` inside Claude Code). `--sparse` keeps the marketplace
+clone to the plugin itself; the installed plugin (`plugin/`) carries the runtime, skills and concept manifests, and
+example code is streamed per concept when a lecture needs it — see [docs/library-cache.md](docs/library-cache.md).
 
 - **User scope** — Plum observes every repo you open.
 - **Project scope** — Plum is enabled only for that repo (written to its `.claude/settings.json`, so teammates who trust the marketplace get it too).
 - **Local scope** — this repo only, just for you (`.claude/settings.local.json`).
 
-Restart Claude Code after installing. Upgrading from the old `plum install`? Run `bin/plum uninstall` first,
+Restart Claude Code after installing. Upgrading from the old `plum install`? Run `plugin/bin/plum uninstall` first,
 otherwise the legacy hooks in `~/.claude/settings.json` fire alongside the plugin's.
 
 To try it without installing: `claude --plugin-dir /path/to/Plum`.
@@ -116,18 +120,18 @@ Data from every repo lands in the same `~/.plum/atrophy.db`, tagged with the ses
 ## CLI
 
 ```bash
-bin/plum skill-health         # skill radar
-bin/plum status               # weekly summary
-bin/plum predict "..."        # log prediction
-bin/plum verify               # mark last delegation verified
-bin/plum export               # dump DB as JSON
-bin/plum reset-scores         # reset all scores to 50
-bin/plum wipe --confirm       # delete all local data
-bin/plum feedback --kind feature --message "…"   # print a pre-filled feedback link (--open to open it)
-bin/plum stats status         # opt-in usage statistics: status | summary | verdicts | send | clear
-bin/plum update [--apply]     # check for a newer Plum now (and install it)
-bin/plum library status       # streamed example cache: fetch <concept> [--lang L] | status | gc | keep | clear
-bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
+plugin/bin/plum skill-health         # skill radar
+plugin/bin/plum status               # weekly summary
+plugin/bin/plum predict "..."        # log prediction
+plugin/bin/plum verify               # mark last delegation verified
+plugin/bin/plum export               # dump DB as JSON
+plugin/bin/plum reset-scores         # reset all scores to 50
+plugin/bin/plum wipe --confirm       # delete all local data
+plugin/bin/plum feedback --kind feature --message "…"   # print a pre-filled feedback link (--open to open it)
+plugin/bin/plum stats status         # opt-in usage statistics: status | summary | verdicts | send | clear
+plugin/bin/plum update [--apply]     # check for a newer Plum now (and install it)
+plugin/bin/plum library status       # streamed example cache: fetch <concept> [--lang L] | status | gc | keep | clear
+plugin/bin/plum uninstall            # remove legacy (pre-plugin) hooks from ~/.claude/settings.json
 ```
 
 Development: `bun test`, `bun run typecheck`, `bun run validate`.

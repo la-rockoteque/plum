@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { loadConcepts, LIBRARY_DIR, CATEGORIES, DOMAINS, LEVELS, LANGUAGES, BACKEND_LANGUAGES } from "./library.js";
+import { loadConcepts, LIBRARY_DIR, EXAMPLES_DIR, CATEGORIES, DOMAINS, LEVELS, LANGUAGES, BACKEND_LANGUAGES } from "./library.js";
 
 // Stage ids become package/module/namespace names in every language.
 const STAGE_ID   = /^[a-z]+$/;
@@ -60,7 +60,7 @@ for (const c of concepts) {
       if (lang === "dotnet" && ex.run.includes("--filter")) expect(ex.run).toMatch(/FullyQualifiedName~RepositoryExample\.Tests\.\w+Tests\.(\s|$)/);
       const files = [...Object.values(ex.stages).flat(), ...ex.tests];
       for (const f of files) {
-        expect({ lang, file: f, exists: existsSync(join(LIBRARY_DIR, "examples", lang, f)) })
+        expect({ lang, file: f, exists: existsSync(join(EXAMPLES_DIR, lang, f)) })
           .toEqual({ lang, file: f, exists: true });
       }
     }

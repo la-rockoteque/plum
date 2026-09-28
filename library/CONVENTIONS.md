@@ -6,8 +6,8 @@ each other's files, and so `/plum:teach` can rely on the same shape everywhere.
 ## Files per concept
 
 ```text
-library/concepts/<id>/concept.json    manifest (schema: Concept in src/library.ts)
-library/concepts/<id>/CONCEPT.md      narrative
+plugin/library/concepts/<id>/concept.json    manifest (schema: Concept in plugin/src/library.ts)
+plugin/library/concepts/<id>/CONCEPT.md      narrative
 library/examples/<lang>/...           code + tests, laid out as below
 ```
 
@@ -161,7 +161,7 @@ Concepts build on each other, so they speak the same small domain. Use these unl
 | `checks` | 3–4 explain-back questions that need understanding, not recall of a term |
 | `examples.<lang>` | `stages` (every stage id → files), `tests`, `run` — paths relative to `library/examples/<lang>/` |
 
-`bun test src` validates the manifest: required fields and counts, id format, stage-id format, known language
+`bun test plugin/src` validates the manifest: required fields and counts, id format, stage-id format, known language
 keys, all five backend languages where required, non-empty `tests` and `run`, existing prerequisite/related ids
 and every referenced file. `related` may only name concepts that already exist; the orchestrator backfills
 forward links at the end of the roadmap.
@@ -199,7 +199,7 @@ cd library/examples/react      && npm ci --silent
    equal the number of tests you wrote (`dotnet test` exits 0 when a filter matches nothing).
 2. Compile-only checks for the shared projects pass: `npm run build` (typescript), `dotnet build`
    (dotnet), `./gradlew compileTestKotlin` (kotlin), `go vet ./...` (go), `npx tsc --noEmit` (react).
-3. `bun test src` passes from the repo root.
+3. `bun test plugin/src` passes from the repo root.
 4. `git status` shows only files inside the concept's own paths.
 
 ## Commits

@@ -4,12 +4,12 @@
   "description": "Professor Plum — cognitive atrophy harness for Claude Code and Codex",
   "type": "module",
   "bin": {
-    "plum": "./bin/plum"
+    "plum": "./plugin/bin/plum"
   },
   "scripts": {
-    "test": "bun test src",
+    "test": "bun test plugin/src",
     "typecheck": "tsc --noEmit",
-    "validate": "claude plugin validate ."
+    "validate": "claude plugin validate . && claude plugin validate plugin"
   },
   "devDependencies": {
     "@types/bun": "latest",

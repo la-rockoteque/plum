@@ -13,7 +13,7 @@ library/
   ROADMAP.md                   planned concepts and release waves
 ```
 
-`bin/plum concepts` lists what's available (`--json` for the full manifests).
+`plugin/bin/plum concepts` lists what's available (`--json` for the full manifests).
 
 ## Current concepts
 
@@ -48,7 +48,7 @@ Each manifest's `examples.<lang>.run` gives the concept's demo command.
 
 1. **Code first.** Add the stages to the language projects under `examples/<lang>/`. Reuse the existing domain
    when the concept fits it. Each stage must be readable on its own, and every stage gets a test.
-2. **Manifest.** Create `concepts/<id>/concept.json` (schema: `Concept` in `src/library.ts`):
+2. **Manifest.** Create `concepts/<id>/concept.json` (schema: `Concept` in `plugin/src/library.ts`):
    - `roles` — canonical name → agnostic role. This is what makes binding to other repos possible, so describe
      the *role*, not the class.
    - `signals` — what Claude should grep for in a consumer repo that suggests the concept applies.
@@ -57,4 +57,4 @@ Each manifest's `examples.<lang>.run` gives the concept's demo command.
 3. **Narrative.** Write `concepts/<id>/CONCEPT.md`: problem → idea → roles table ("what to look for in a real
    repo") → stage walk → trade-offs / when not to → misconceptions. Keep it free of language-specific paths.
 4. Follow [CONVENTIONS.md](CONVENTIONS.md) — layout, collision rules, allowed libraries, definition of done.
-   `bun test src` validates every manifest.
+   `bun test plugin/src` validates every manifest.

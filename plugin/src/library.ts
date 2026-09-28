@@ -3,6 +3,8 @@ import { join } from "path";
 import { PLUGIN_ROOT } from "./env.js";
 
 export const LIBRARY_DIR = join(PLUGIN_ROOT, "library");
+// Example code lives outside the installed plugin, at the repository root (streamed on demand when installed).
+export const EXAMPLES_DIR = join(PLUGIN_ROOT, "..", "library", "examples");
 
 export const CATEGORIES = ["principles", "testing", "architecture", "backend", "frontend", "infra", "refactoring", "security"] as const;
 export const DOMAINS    = ["implementation", "debugging", "testing", "architecture", "synthesis"] as const;

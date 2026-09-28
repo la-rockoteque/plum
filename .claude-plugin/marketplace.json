@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "plum",
-      "source": "./",
+      "source": "./plugin",
       "description": "Professor Plum \u2014 cognitive atrophy harness for Claude Code"
     }
   ]

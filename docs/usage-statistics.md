@@ -16,7 +16,7 @@ A committed, shared `<project>/.plum/config.json` **cannot** turn them on — an
 `config.local.json` that has been committed to git (it's treated as shared). It can turn them off for everyone:
 `{ "telemetry": { "enabled": false } }` wins over any personal setting.
 
-`bin/plum stats status` shows whether they're on and where the data lives.
+`plugin/bin/plum stats status` shows whether they're on and where the data lives.
 
 ## What is recorded
 
@@ -46,21 +46,21 @@ dropped.
 ## Look at them
 
 ```sh
-bin/plum stats summary              # last 30 days, human-readable
-bin/plum stats summary --days 7 --json
+plugin/bin/plum stats summary              # last 30 days, human-readable
+plugin/bin/plum stats summary --days 7 --json
 ```
 
 ## Record a verdict on a nudge
 
 ```sh
-bin/plum stats verdicts '{"pattern":"test_delegation","verdict":"false_positive"}'
+plugin/bin/plum stats verdicts '{"pattern":"test_delegation","verdict":"false_positive"}'
 ```
 
 ## Share them
 
 ```sh
-bin/plum stats send          # prints the [Usage statistics] summary and a pre-filled form link
-bin/plum stats send --open   # also opens the form; you still click Submit yourself
+plugin/bin/plum stats send          # prints the [Usage statistics] summary and a pre-filled form link
+plugin/bin/plum stats send --open   # also opens the form; you still click Submit yourself
 ```
 
 The summary holds totals, medians, top categories and ratios — never raw events. Nothing leaves your machine
@@ -69,5 +69,5 @@ unless you submit the form. In Claude Code, `/plum:feedback` asks before opening
 ## Clear them
 
 ```sh
-bin/plum stats clear         # deletes usage.jsonl and the debug log
+plugin/bin/plum stats clear         # deletes usage.jsonl and the debug log
 ```

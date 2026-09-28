@@ -19,9 +19,9 @@ feature request — again only after you say yes.
 ## From the terminal
 
 ```sh
-bin/plum feedback --kind feature --message "Teach Rust concepts" --why "our backend is Rust"
-bin/plum feedback --kind bug --message "…" --open        # also opens the browser
-echo "long text" | bin/plum feedback --kind feedback      # message from stdin
+plugin/bin/plum feedback --kind feature --message "Teach Rust concepts" --why "our backend is Rust"
+plugin/bin/plum feedback --kind bug --message "…" --open        # also opens the browser
+echo "long text" | plugin/bin/plum feedback --kind feedback      # message from stdin
 ```
 
 | Flag | Meaning |

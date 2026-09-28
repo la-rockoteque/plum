@@ -29,8 +29,8 @@ A failed or offline check never blocks startup; it's retried next time. When Plu
 ## By hand
 
 ```sh
-bin/plum update           # check now
-bin/plum update --apply   # check and install (claude plugin marketplace update + claude plugin update)
+plugin/bin/plum update           # check now
+plugin/bin/plum update --apply   # check and install (claude plugin marketplace update + claude plugin update)
 ```
 
 ## Claude Code's own auto-update

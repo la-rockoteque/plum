@@ -7,7 +7,7 @@ plum:
   image: oven/bun:1
   script:
     - bun install --frozen-lockfile
-    - bun test src
+    - bun test plugin/src
     - bunx tsc --noEmit
 
 examples:python:

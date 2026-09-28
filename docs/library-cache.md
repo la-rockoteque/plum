@@ -5,7 +5,7 @@ concept instantly. The example **code** is not installed: when a lecture needs i
 concept's files in one language.
 
 ```sh
-bin/plum library fetch unit-of-work --lang kotlin   # prints the local directory and the files
+plugin/bin/plum library fetch unit-of-work --lang kotlin   # prints the local directory and the files
 ```
 
 The fetch is a blobless, depth-1, sparse `git fetch` of the exact commit you have installed, over the same git
@@ -14,7 +14,7 @@ access you used to add the marketplace — typically a few KB per concept and la
 
 ## Garbage collection
 
-Before every fetch (and on `bin/plum library gc`), Plum removes:
+Before every fetch (and on `plugin/bin/plum library gc`), Plum removes:
 
 1. files from a different Plum version than the one installed,
 2. entries not used for `library.cacheTtlDays` (default 30),
@@ -24,10 +24,10 @@ Concepts you've fetched `library.keepAfterUses` times (default 3), or pinned by 
 Usage counts survive eviction, so a concept you use often is kept again as soon as it's back.
 
 ```sh
-bin/plum library status              # what's cached, sizes, uses, kept / cached / evicted
-bin/plum library keep cqrs           # never collect cqrs (any language)
-bin/plum library unkeep cqrs
-bin/plum library clear               # delete the whole cache
+plugin/bin/plum library status              # what's cached, sizes, uses, kept / cached / evicted
+plugin/bin/plum library keep cqrs           # never collect cqrs (any language)
+plugin/bin/plum library unkeep cqrs
+plugin/bin/plum library clear               # delete the whole cache
 ```
 
 ## From a checkout
