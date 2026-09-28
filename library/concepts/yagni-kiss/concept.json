@@ -1,0 +1,118 @@
+{
+  "id": "yagni-kiss",
+  "title": "YAGNI and KISS",
+  "category": "principles",
+  "domain": "implementation",
+  "level": "foundation",
+  "summary": "Build only what today's one real case needs; delete the pluggable seam, the hooks and the config flag nobody uses.",
+  "prerequisites": [
+    "dry"
+  ],
+  "related": [
+    "dependency-inversion"
+  ],
+  "signals": [
+    "a `Strategy`/`Policy` interface with exactly one production implementation and no second caller",
+    "a factory or registry keyed by a config string that only ever has one entry registered",
+    "hook or callback lists (`onBefore*`, `onAfter*`) that are empty at every call site in the repo",
+    "a config flag that is read in exactly one place, or read nowhere at all, and never set to anything but its default"
+  ],
+  "roles": {
+    "OrderCancellationService": "the abstraction built for a future that never arrived",
+    "StandardCancellationPolicy": "the only implementation that has ever existed",
+    "CancellationPolicyRegistry": "the pluggable seam nobody plugs a second thing into",
+    "CancellationHooks": "extension points nobody has wired up",
+    "Order.canBeCancelled": "what's left once the speculation is deleted"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Built for later",
+      "idea": "A registry, a hook list and a config flag exist for a policy that has exactly one implementation; a typo in the config key silently falls back instead of failing."
+    },
+    {
+      "id": "after",
+      "title": "Deleted to what's called",
+      "idea": "One method holds the one real rule; the same behavioural cases still pass, with far less to read."
+    }
+  ],
+  "checks": [
+    "The registry only has one entry registered. What does keeping it cost a new hire who has to change the cancellation rule today?",
+    "A second cancellation policy shows up next sprint. Does that fact retroactively justify having built the interface early? What would justify building it now instead?",
+    "What is the 'rule of three' applied to abstractions rather than duplicated code, and what's the concrete second use case that would justify reintroducing a policy seam here?",
+    "YAGNI says 'don't build it yet' — explain why that is not the same advice as 'skip the tests' or 'skip refactoring'."
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/yagni_kiss/before.py"
+        ],
+        "after": [
+          "src/yagni_kiss/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_yagni_kiss.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_yagni_kiss.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/yagni-kiss/before.ts"
+        ],
+        "after": [
+          "src/yagni-kiss/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/yagni-kiss.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/yagni-kiss.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "yagnikiss/before/order.go"
+        ],
+        "after": [
+          "yagnikiss/after/order.go"
+        ]
+      },
+      "tests": [
+        "yagnikiss/before/order_test.go",
+        "yagnikiss/after/order_test.go"
+      ],
+      "run": "go test ./yagnikiss/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/YagniKiss/Before/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/YagniKiss/After/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/YagniKissTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.YagniKissTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/yagnikiss/before/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/yagnikiss/after/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/YagniKissTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.YagniKissTest'"
+    }
+  }
+}
