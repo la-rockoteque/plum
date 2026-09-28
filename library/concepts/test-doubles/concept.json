@@ -1,0 +1,124 @@
+{
+  "id": "test-doubles",
+  "title": "Test Doubles: dummy, stub, spy, mock, fake",
+  "category": "testing",
+  "domain": "testing",
+  "level": "foundation",
+  "summary": "Five ways to replace a real collaborator in a test, each with its own name, purpose, and kind of assertion.",
+  "prerequisites": [
+    "red-green-refactor",
+    "dependency-inversion"
+  ],
+  "related": [
+    "repository"
+  ],
+  "signals": [
+    "unit tests opening real sockets, SMTP clients, or database connections",
+    "a mocking framework standing in for every collaborator, even plain data holders",
+    "assertions on a mock's recorded call for a value the test never actually uses",
+    "a hand-rolled in-memory implementation of a repository interface used only in tests"
+  ],
+  "roles": {
+    "CancelOrder": "use case under test",
+    "OrderRepository": "port the use case depends on for persistence",
+    "InMemoryOrderRepository": "fake: real behaviour, no external system",
+    "PaymentGateway": "port for an external, side-effecting collaborator",
+    "StubPaymentGateway": "stub: a canned response, no assertions made on it",
+    "MockPaymentGateway": "mock: a hand-rolled expectation, behaviour verification",
+    "Mailer": "port for a fire-and-forget side effect",
+    "SpyMailer": "spy: records calls for the test to assert afterwards, state verification",
+    "AuditLogger": "port unrelated to the outcome this test cares about",
+    "NullAuditLogger": "dummy: satisfies the constructor, never invoked"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Before",
+      "idea": "CancelOrder constructs its own mailer and payment gateway. Both are real-dependency stand-ins that throw \"network unavailable\", so the test can only assert that the use case blows up."
+    },
+    {
+      "id": "after",
+      "title": "After",
+      "idea": "Every collaborator is injected behind a port. The tests plug in a dummy, a stub, a spy, a mock and a fake — one per role — and name each for what it is."
+    }
+  ],
+  "checks": [
+    "What's the difference between a stub and a mock, and which kind of assertion — state or behaviour — does each support?",
+    "Why does a dummy exist at all if the test never calls it?",
+    "When does a fake earn its cost over a mock, and when is that the wrong trade?",
+    "Why does replacing every collaborator with a mocking-framework mock couple a test to the collaborator's implementation instead of its contract?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/test_doubles/before.py"
+        ],
+        "after": [
+          "src/test_doubles/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_test_doubles.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_test_doubles.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/test-doubles/before.ts"
+        ],
+        "after": [
+          "src/test-doubles/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/test-doubles.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/test-doubles.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "testdoubles/before/order.go"
+        ],
+        "after": [
+          "testdoubles/after/order.go"
+        ]
+      },
+      "tests": [
+        "testdoubles/before/order_test.go",
+        "testdoubles/after/order_test.go"
+      ],
+      "run": "go test ./testdoubles/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/TestDoubles/Before/CancelOrder.cs"
+        ],
+        "after": [
+          "RepositoryExample/TestDoubles/After/CancelOrder.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/TestDoublesTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.TestDoublesTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/testdoubles/before/CancelOrder.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/testdoubles/after/CancelOrder.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/TestDoublesTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.TestDoublesTest'"
+    }
+  }
+}
