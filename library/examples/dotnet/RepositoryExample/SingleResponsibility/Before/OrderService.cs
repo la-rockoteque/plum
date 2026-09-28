@@ -1,11 +1,13 @@
 namespace RepositoryExample.SingleResponsibility.Before;
 
+public enum OrderStatus { Pending, Shipped, Cancelled }
+
 public sealed class Order
 {
-    public required string Id { get; init; }
+    public required int Id { get; init; }
     public required string CustomerName { get; init; }
     public required string CustomerEmail { get; init; }
-    public string Status { get; set; } = "pending";
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
 }
 
 // Cancels an order, formats the customer email, and writes the audit log —
@@ -18,9 +20,9 @@ public sealed class OrderService
 
     public void Cancel(Order order, string reason)
     {
-        if (order.Status == "shipped")
-            throw new InvalidOperationException("cannot cancel a shipped order");
-        order.Status = "cancelled";
+        if (order.Status is OrderStatus.Shipped or OrderStatus.Cancelled)
+            throw new InvalidOperationException("cannot cancel a shipped or cancelled order");
+        order.Status = OrderStatus.Cancelled;
         SentEmails.Add($"Dear {order.CustomerName}, your order {order.Id} was cancelled. Reason: {reason}.");
         AuditLog.Add($"{order.Id}|CANCELLED|{reason}");
     }

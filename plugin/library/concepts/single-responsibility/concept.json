@@ -7,7 +7,9 @@
   "summary": "A class should answer to one actor, not do literally one thing — each reason to change belongs to its own collaborator.",
   "prerequisites": [],
   "related": [
-    "dependency-inversion"
+    "dependency-inversion",
+    "open-closed",
+    "coupling-cohesion"
   ],
   "signals": [
     "one class (often named `*Service` or `*Manager`) that validates a business rule, formats a message, and writes a log in the same method",

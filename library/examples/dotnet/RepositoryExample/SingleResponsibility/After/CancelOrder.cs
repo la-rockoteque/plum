@@ -1,14 +1,24 @@
 namespace RepositoryExample.SingleResponsibility.After;
 
+public interface INotifier
+{
+    void NotifyCancelled(Order order, string reason);
+}
+
+public interface IAuditor
+{
+    void RecordCancelled(Order order, string reason);
+}
+
 // Owns only the cancellation rule; notifying and auditing are delegated to
-// its collaborators.
-public sealed class CancelOrder(OrderNotifier notifier, AuditLog auditLog)
+// ports it declares, not to concrete collaborators.
+public sealed class CancelOrder(INotifier notifier, IAuditor auditLog)
 {
     public void Execute(Order order, string reason)
     {
-        if (order.Status == "shipped")
-            throw new InvalidOperationException("cannot cancel a shipped order");
-        order.Status = "cancelled";
+        if (order.Status is OrderStatus.Shipped or OrderStatus.Cancelled)
+            throw new InvalidOperationException("cannot cancel a shipped or cancelled order");
+        order.Status = OrderStatus.Cancelled;
         notifier.NotifyCancelled(order, reason);
         auditLog.RecordCancelled(order, reason);
     }

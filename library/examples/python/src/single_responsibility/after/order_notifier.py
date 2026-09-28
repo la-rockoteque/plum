@@ -2,7 +2,8 @@ from single_responsibility.after.order import Order
 
 
 class OrderNotifier:
-    """Owns the wording of the cancellation email — its only reason to change."""
+    """Owns the wording of the cancellation email — its only reason to change.
+    Satisfies CancelOrder's Notifier port structurally; nothing declares it."""
 
     def __init__(self) -> None:
         self.sent: list[str] = []

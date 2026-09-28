@@ -1,8 +1,10 @@
 package example.singleresponsibility.after
 
+enum class OrderStatus { PENDING, SHIPPED, CANCELLED }
+
 data class Order(
-    val id: String,
+    val id: Int,
     val customerName: String,
     val customerEmail: String,
-    var status: String = "pending",
+    var status: OrderStatus = OrderStatus.PENDING,
 )

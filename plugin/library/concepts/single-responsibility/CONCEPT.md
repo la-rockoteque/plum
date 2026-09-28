@@ -49,10 +49,12 @@ moves to a collaborator that owns just that concern.
    the exact email wording and the exact audit line, because there is no way to trigger the rule without also
    producing the other two outputs. Change the email's wording and you edit `OrderService` — the same class, and
    the same test, that own the cancellation rule.
-2. **after** — `CancelOrder` checks the rule and delegates to `OrderNotifier` and `AuditLog`. Its own tests use
-   fakes for both collaborators and never assert their exact wording or format. `OrderNotifier` and `AuditLog`
-   each have their own tests, with no mention of the cancellation rule. Change the email's wording now and only
-   `OrderNotifier` and its test are touched; `CancelOrder`'s tests keep passing untouched.
+2. **after** — `CancelOrder` checks the rule and delegates to `OrderNotifier` and `AuditLog` through the notifier
+   and audit ports it declares. Its own tests pass spies satisfying those ports and assert only the
+   `(orderId, reason)` tuple the spy recorded — never the wording or format. `OrderNotifier` and `AuditLog` each
+   have their own tests that assert the exact wording and format, with no mention of the cancellation rule. Change
+   the email's wording now and only `OrderNotifier` and its test are touched; `CancelOrder`'s spy-based tests keep
+   passing untouched.
 
 ## Trade-offs / when not to
 

@@ -2,7 +2,8 @@ from single_responsibility.after.order import Order
 
 
 class AuditLog:
-    """Owns the audit entry format — its only reason to change."""
+    """Owns the audit entry format — its only reason to change. Satisfies
+    CancelOrder's Auditor port structurally; nothing declares it."""
 
     def __init__(self) -> None:
         self.entries: list[str] = []

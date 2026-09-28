@@ -1,12 +1,19 @@
 from dataclasses import dataclass
+from enum import Enum
+
+
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    CANCELLED = "cancelled"
 
 
 @dataclass
 class Order:
-    id: str
+    id: int
     customer_name: str
     customer_email: str
-    status: str = "pending"
+    status: OrderStatus = OrderStatus.PENDING
 
 
 class OrderService:
@@ -19,9 +26,9 @@ class OrderService:
         self.audit_log: list[str] = []
 
     def cancel(self, order: Order, reason: str) -> None:
-        if order.status == "shipped":
-            raise ValueError("cannot cancel a shipped order")
-        order.status = "cancelled"
+        if order.status in (OrderStatus.SHIPPED, OrderStatus.CANCELLED):
+            raise ValueError("cannot cancel a shipped or cancelled order")
+        order.status = OrderStatus.CANCELLED
         self.sent_emails.append(
             f"Dear {order.customer_name}, your order {order.id} was cancelled. Reason: {reason}."
         )

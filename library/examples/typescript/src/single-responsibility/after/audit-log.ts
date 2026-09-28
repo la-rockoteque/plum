@@ -1,6 +1,7 @@
 import type { Order } from "./order.js";
 
-// Owns the audit entry format — its only reason to change.
+// Owns the audit entry format — its only reason to change. Satisfies
+// CancelOrder's Auditor port structurally; nothing declares it.
 export class AuditLog {
   readonly entries: string[] = [];
 

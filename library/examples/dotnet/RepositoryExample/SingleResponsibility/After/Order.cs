@@ -1,9 +1,11 @@
 namespace RepositoryExample.SingleResponsibility.After;
 
+public enum OrderStatus { Pending, Shipped, Cancelled }
+
 public sealed class Order
 {
-    public required string Id { get; init; }
+    public required int Id { get; init; }
     public required string CustomerName { get; init; }
     public required string CustomerEmail { get; init; }
-    public string Status { get; set; } = "pending";
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
 }

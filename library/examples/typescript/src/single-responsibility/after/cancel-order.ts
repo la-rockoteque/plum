@@ -1,17 +1,25 @@
-import type { AuditLog } from "./audit-log.js";
 import type { Order } from "./order.js";
-import type { OrderNotifier } from "./order-notifier.js";
+
+export interface Notifier {
+  notifyCancelled(order: Order, reason: string): void;
+}
+
+export interface Auditor {
+  recordCancelled(order: Order, reason: string): void;
+}
 
 // Owns only the cancellation rule; notifying and auditing are delegated to
-// its collaborators.
+// ports it declares, not to concrete collaborators.
 export class CancelOrder {
   constructor(
-    private readonly notifier: OrderNotifier,
-    private readonly auditLog: AuditLog,
+    private readonly notifier: Notifier,
+    private readonly auditLog: Auditor,
   ) {}
 
   execute(order: Order, reason: string): void {
-    if (order.status === "shipped") throw new Error("cannot cancel a shipped order");
+    if (order.status === "shipped" || order.status === "cancelled") {
+      throw new Error("cannot cancel a shipped or cancelled order");
+    }
     order.status = "cancelled";
     this.notifier.notifyCancelled(order, reason);
     this.auditLog.recordCancelled(order, reason);

@@ -1,8 +1,10 @@
+export type OrderStatus = "pending" | "shipped" | "cancelled";
+
 export interface Order {
-  id: string;
+  id: number;
   customerName: string;
   customerEmail: string;
-  status: string;
+  status: OrderStatus;
 }
 
 // Cancels an order, formats the customer email, and writes the audit log —
@@ -13,7 +15,9 @@ export class OrderService {
   readonly auditLog: string[] = [];
 
   cancel(order: Order, reason: string): void {
-    if (order.status === "shipped") throw new Error("cannot cancel a shipped order");
+    if (order.status === "shipped" || order.status === "cancelled") {
+      throw new Error("cannot cancel a shipped or cancelled order");
+    }
     order.status = "cancelled";
     this.sentEmails.push(
       `Dear ${order.customerName}, your order ${order.id} was cancelled. Reason: ${reason}.`,

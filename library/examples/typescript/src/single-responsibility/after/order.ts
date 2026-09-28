@@ -1,6 +1,8 @@
+export type OrderStatus = "pending" | "shipped" | "cancelled";
+
 export interface Order {
-  id: string;
+  id: number;
   customerName: string;
   customerEmail: string;
-  status: string;
+  status: OrderStatus;
 }

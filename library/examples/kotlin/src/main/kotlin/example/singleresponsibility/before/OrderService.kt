@@ -1,10 +1,12 @@
 package example.singleresponsibility.before
 
+enum class OrderStatus { PENDING, SHIPPED, CANCELLED }
+
 data class Order(
-    val id: String,
+    val id: Int,
     val customerName: String,
     val customerEmail: String,
-    var status: String = "pending",
+    var status: OrderStatus = OrderStatus.PENDING,
 )
 
 // Cancels an order, formats the customer email, and writes the audit log —
@@ -15,8 +17,10 @@ class OrderService {
     val auditLog = mutableListOf<String>()
 
     fun cancel(order: Order, reason: String) {
-        require(order.status != "shipped") { "cannot cancel a shipped order" }
-        order.status = "cancelled"
+        require(order.status != OrderStatus.SHIPPED && order.status != OrderStatus.CANCELLED) {
+            "cannot cancel a shipped or cancelled order"
+        }
+        order.status = OrderStatus.CANCELLED
         sentEmails.add("Dear ${order.customerName}, your order ${order.id} was cancelled. Reason: $reason.")
         auditLog.add("${order.id}|CANCELLED|$reason")
     }

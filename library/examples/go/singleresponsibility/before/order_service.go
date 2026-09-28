@@ -1,15 +1,26 @@
 package before
 
-import "errors"
+import (
+	"errors"
+	"strconv"
+)
+
+type OrderStatus string
+
+const (
+	Pending   OrderStatus = "pending"
+	Shipped   OrderStatus = "shipped"
+	Cancelled OrderStatus = "cancelled"
+)
 
 type Order struct {
-	ID            string
+	ID            int
 	CustomerName  string
 	CustomerEmail string
-	Status        string
+	Status        OrderStatus
 }
 
-var ErrShippedOrder = errors.New("cannot cancel a shipped order")
+var ErrShippedOrCancelledOrder = errors.New("cannot cancel a shipped or cancelled order")
 
 // OrderService cancels an order, formats the customer email, and writes the
 // audit log — three reasons to change: the cancellation rule, the email
@@ -20,12 +31,13 @@ type OrderService struct {
 }
 
 func (s *OrderService) Cancel(order *Order, reason string) error {
-	if order.Status == "shipped" {
-		return ErrShippedOrder
+	if order.Status == Shipped || order.Status == Cancelled {
+		return ErrShippedOrCancelledOrder
 	}
-	order.Status = "cancelled"
-	s.SentEmails = append(s.SentEmails, "Dear "+order.CustomerName+", your order "+order.ID+
+	order.Status = Cancelled
+	id := strconv.Itoa(order.ID)
+	s.SentEmails = append(s.SentEmails, "Dear "+order.CustomerName+", your order "+id+
 		" was cancelled. Reason: "+reason+".")
-	s.AuditLog = append(s.AuditLog, order.ID+"|CANCELLED|"+reason)
+	s.AuditLog = append(s.AuditLog, id+"|CANCELLED|"+reason)
 	return nil
 }
