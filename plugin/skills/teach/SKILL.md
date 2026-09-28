@@ -95,7 +95,7 @@ concept and repo) and share the link. Otherwise give the local path.
 ## 6. Close the loop
 
 Ask one explain-back question from the quiz in chat. If the user answers, grade it `full` / `partial` / incorrect and
-call the plum MCP tool `log_explanation` with the concept's Plum domain (shown in the brief's first line) — as in
-`/plum:explain`. Don't log an incorrect answer.
+run `"$P" explained <domain> --quality full|partial` with the concept's Plum domain (shown in the brief's first
+line) — as in `/plum:explain`. Don't log an incorrect answer.
 
 Do not modify the user's repository during a teaching session.

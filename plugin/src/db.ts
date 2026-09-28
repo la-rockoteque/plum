@@ -84,7 +84,7 @@ function migrate(db: Database): void {
   }
 }
 
-// Session of the most recent hook event. Used by manual commands (predict, verify, MCP)
+// Session of the most recent hook event. Used by manual commands (predict, verify, explained, independent)
 // that don't receive a session_id from Claude Code.
 // ponytail: picks the most active session; wrong if two sessions run concurrently.
 export function latestSessionId(): string | null {

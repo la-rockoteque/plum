@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Plum launcher — used by the plugin's hooks, skills and MCP server.
+# Plum launcher — used by the plugin's hooks and skills.
 # Finds bun on PATH, falling back to the default install location.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUN="$(command -v bun || echo "$HOME/.bun/bin/bun")"

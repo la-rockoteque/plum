@@ -15,14 +15,14 @@ This skill is used when a Plum explain_back intervention has been triggered, or 
 2. Wait for their response. Evaluate it as: `full` (correct and complete), `partial` (right direction, missing nuance), or incorrect.
 
 3. Based on their response:
-   - Full: call `log_explanation` (plum MCP server) with `quality: "full"`, then confirm they got it right and add one insight they may have missed.
-   - Partial: call `log_explanation` (plum MCP server) with `quality: "partial"`, then fill in the gap.
-   - Incorrect: do NOT call `log_explanation` — explain the correct answer instead.
+   - Full: log it with quality `full`, then confirm they got it right and add one insight they may have missed.
+   - Partial: log it with quality `partial`, then fill in the gap.
+   - Incorrect: do NOT log anything — explain the correct answer instead.
 
-4. The MCP tool call:
+4. Log it:
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/bin/plum" explained <domain> --quality full|partial
    ```
-   Tool: log_explanation (plum MCP server)
-   Args: { "domain": "<detected domain>", "quality": "full" | "partial" }
-   ```
+   `<domain>` is one of implementation, debugging, testing, architecture, synthesis.
 
 This is the core explain_back loop. Never skip step 1 — the value is in the user attempting the explanation, not just receiving confirmation.

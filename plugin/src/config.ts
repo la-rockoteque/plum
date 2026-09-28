@@ -182,7 +182,7 @@ export function getConfig(): PlumConfig {
   }));
 }
 
-// Long-running processes (the MCP server) call this so config changes, like opting out, apply without a restart.
+// Long-running callers use this so config changes, like opting out, apply without a restart.
 export function reloadConfig(): void { _cfg = null; }
 
 function mergeLayers(a: Layer, b: Layer): Layer {

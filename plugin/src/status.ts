@@ -2,7 +2,7 @@ import { getDb } from "./db.js";
 
 const WEEK_MS = 604_800_000;
 
-// 7-day engagement summary (spec metrics RQ1–RQ5). Shared by the CLI and the MCP server.
+// 7-day engagement summary (spec metrics RQ1–RQ5). Used by `plum status` and the cognitive-check skill.
 export function weeklyStatus(): string {
   const db   = getDb();
   const week = Date.now() - WEEK_MS;

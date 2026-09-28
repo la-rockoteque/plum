@@ -93,7 +93,6 @@ update (or updates silently if you opt in) — see [docs/updates.md](docs/update
 The plugin wires up:
 
 - **Hooks** (`hooks/hooks.json`) — PreToolUse, PostToolUse, UserPromptSubmit, SessionEnd
-- **MCP server** (`.mcp.json`) — `get_skill_context`, `log_explanation`, `log_independence`, `get_weekly_status`
 - **Skills** (`skills/`)
 
 | Command | What it does |
@@ -102,7 +101,7 @@ The plugin wires up:
 | `/plum:cognitive-check` | Weekly delegation breakdown + predict rate |
 | `/plum:predict <text>` | Log a hypothesis before asking Claude (core retention gesture) |
 | `/plum:verify` | Mark the last delegation as reviewed |
-| `/plum:explain` | Explain-back loop, logged via MCP |
+| `/plum:explain` | Explain-back loop, logged with `plum explained` |
 | `/plum:teach <concept>` | Lecture deck on a concept, bound to the current repo's domain and architecture |
 | `/plum:feedback <text>` | Draft feedback or a feature request, review it, then open a pre-filled form you submit yourself |
 

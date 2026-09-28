@@ -20,7 +20,7 @@ A committed, shared `<project>/.plum/config.json` **cannot** turn them on — an
 
 ## What is recorded
 
-One line per Plum run (hook, CLI command or MCP tool call) in `~/.plum/usage.jsonl`:
+One line per Plum run (hook or CLI command) in `~/.plum/usage.jsonl`:
 
 - the command name (from a fixed list), and the run's duration
 - counts: prompt and tool categories, patterns detected, which nudge type fired, verifications

@@ -75,18 +75,19 @@ test("design critique atrophy fires on unverified design work", () => {
   expect(out).toContain("diff_review");
 });
 
-test("MCP server speaks newline-delimited JSON-RPC", async () => {
-  const p = Bun.spawn(["bun", CLI, "mcp"], {
-    stdin: "pipe", stdout: "pipe", env: { ...process.env, PLUM_DATA_DIR: dataDir }
-  });
-  p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) + "\n");
-  p.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-  p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
-  p.stdin.end();
-
-  const lines = (await new Response(p.stdout).text()).trim().split("\n").map((l) => JSON.parse(l));
-  expect(lines[0].result.protocolVersion).toBe("2025-06-18");
-  expect(lines[1].result.tools.map((t: any) => t.name)).toContain("log_explanation");
+test("explained and independent log engagement and raise the domain score", () => {
+  hook("post-tool", { tool_name: "Bash", tool_input: { command: "ls" } });   // creates the DB
+  const before = (db().query(`SELECT score FROM skill_scores WHERE domain = 'testing'`).get() as any).score;
+  expect(run(["explained", "testing", "--quality", "full"])).toContain("Explanation logged for testing (full)");
+  expect(run(["independent", "testing"])).toContain("Independence logged for testing");
+  const after = (db().query(`SELECT score FROM skill_scores WHERE domain = 'testing'`).get() as any).score;
+  expect(after).toBeGreaterThan(before);
+  const kinds = (db().query(`SELECT event_type, session_id FROM events WHERE event_type IN ('explanation','independence')`).all() as any[]);
+  expect(kinds.map((k) => k.event_type).sort()).toEqual(["explanation", "independence"]);
+  expect(kinds.every((k) => k.session_id === "s1")).toBe(true);
+  const bad = Bun.spawnSync(["bun", CLI, "explained", "not-a-domain"], { env: { ...process.env, PLUM_DATA_DIR: dataDir } });
+  expect(bad.exitCode).toBe(1);
+  expect(bad.stderr.toString()).toContain("Unknown domain");
 });
 
 test("week-wide patterns cool down across sessions, not per session", () => {
@@ -100,16 +101,11 @@ test("week-wide patterns cool down across sessions, not per session", () => {
   expect(s2).not.toContain("debugging");
 });
 
-test("MCP skill context suggests library concepts for at-risk domains", async () => {
+test("context suggests library concepts for at-risk domains", () => {
   hook("post-tool", { tool_name: "Bash", tool_input: { command: "ls" } });   // creates the DB
   db().run(`UPDATE skill_scores SET score = 10 WHERE domain = 'architecture'`);
-
-  const p = Bun.spawn(["bun", CLI, "mcp"], {
-    stdin: "pipe", stdout: "pipe", env: { ...process.env, PLUM_DATA_DIR: dataDir }
-  });
-  p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_skill_context", arguments: {} } }) + "\n");
-  p.stdin.end();
-
-  const reply = JSON.parse((await new Response(p.stdout).text()).trim());
-  expect(reply.result.content[0].text).toContain("/plum:teach cqrs");
+  const out = run(["context"]);
+  expect(out).toContain("Architecture");
+  expect(out).toContain("AT RISK");
+  expect(out).toContain("/plum:teach cqrs");
 });

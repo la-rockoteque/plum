@@ -7,7 +7,6 @@
  *   plum post-tool      reads PostToolUse JSON from stdin
  *   plum user-prompt    reads UserPromptSubmit JSON from stdin
  *   plum session-end    reads SessionEnd JSON from stdin
- *   plum mcp            run the MCP server on stdio
  *
  * User commands:
  *   plum skill-health   print skill radar
@@ -33,6 +32,7 @@ import { record, recordError, runStatsCommand, type UsageData } from "./telemetr
 import { runFeedbackCommand }                         from "./feedback.js";
 import { runUpdateCheck, runUpdateCommand }           from "./update.js";
 import { runLibraryCommand }                          from "./library-cache.js";
+import { skillContext, logExplanation, logIndependence } from "./coaching.js";
 import { runTeachCommand }                            from "./teach.js";
 import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
@@ -75,12 +75,20 @@ async function main(): Promise<void> {
     case "stats":        { process.exitCode = await runStatsCommand(process.argv.slice(3)); return; }
     case "library":      { process.exitCode = runLibraryCommand(process.argv.slice(3)); return; }
     case "teach":        { process.exitCode = await runTeachCommand(process.argv.slice(3)); return; }
-    case "mcp":          { await import("./mcp-server.js"); return; }
+    case "context":      return console.log(skillContext());
+    case "explained":    return userCommand(() => logExplanation(process.argv[3] ?? "", process.argv.includes("partial") ? "partial" : "full"));
+    case "independent":  return userCommand(() => logIndependence(process.argv[3] ?? ""));
     case "install":      return console.log(INSTALL_HELP);
     case "uninstall":    return uninstallHooks();
     default:
       console.log(HELP);
   }
+}
+
+// User-facing commands report a bad argument as one clean line and a non-zero exit, not a stack trace.
+function userCommand(fn: () => string): void {
+  try { console.log(fn()); }
+  catch (e) { console.error(`[Plum] ${(e as Error).message}`); process.exitCode = 1; }
 }
 
 const HELP = `
@@ -98,6 +106,9 @@ Plum — Professor Plum cognitive atrophy harness
     status        weekly delegation, verify, predict, explain, independence summary
     predict <txt> log a prediction before asking Claude (boosts synthesis score)
     verify        manually mark last delegation as verified (boosts score)
+    context       skill scores, at-risk domains, coaching guidance and active patterns
+    explained <domain> [--quality full|partial]   log a successful explain-back
+    independent <domain>                          log that the user solved it themselves
     export        dump DB to JSON (stdout)
     reset-scores  reset all skill scores to 50
     wipe          delete all data in ~/.plum/ (irreversible)
