@@ -15,7 +15,7 @@ examples:python:
   script:
     - cd library/examples/python
     - python -m venv .venv
-    - .venv/bin/pip install -q 'pytest>=8' 'SQLAlchemy==2.0.53'
+    - .venv/bin/pip install -q 'pytest>=8' 'SQLAlchemy==2.0.53' 'hypothesis==6.168.3'
     - .venv/bin/pytest -q
 
 examples:typescript:

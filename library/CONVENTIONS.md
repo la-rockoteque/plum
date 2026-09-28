@@ -57,6 +57,10 @@ infrastructure-as-code, immutable-infrastructure) ship in `infra`. The validator
 - **C# and Kotlin:** test helper types (fakes, clocks, builders) are **nested inside the test class**, never at
   namespace/package level, so two concepts' `FakeClock`s can't collide.
 - **Python, Go, TypeScript:** helpers live in the concept's own test file or its own package, never in shared modules.
+- **Kotlin + kotest-property:** `checkAll` is `suspend`; wrap it in a block body —
+  `@Test fun ...() { runBlocking { checkAll(...) { ... } } }`. An expression body (`= runBlocking { }`) returns a
+  value and JUnit 4 rejects the class.
+- **dotnet + FsCheck:** use `[Property]` from `FsCheck.Xunit` alongside `[Fact]`.
 
 ### Test names
 
@@ -162,7 +166,7 @@ No language-specific file paths in the narrative; the manifest carries those. Ci
 Worktrees contain only committed files, so set up each project before running tests:
 
 ```sh
-cd library/examples/python     && uv venv -q -p 3.12 .venv && uv pip install -q -p .venv/bin/python 'pytest>=8' 'SQLAlchemy==2.0.53' 'hypothesis==6.140.2'
+cd library/examples/python     && uv venv -q -p 3.12 .venv && uv pip install -q -p .venv/bin/python 'pytest>=8' 'SQLAlchemy==2.0.53' 'hypothesis==6.168.3'
 cd library/examples/typescript && npm ci --silent
 cd library/examples/react      && npm ci --silent
 # go, dotnet and kotlin restore on first build

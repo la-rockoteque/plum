@@ -14,6 +14,7 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-dao:1.0.0")
     runtimeOnly("org.slf4j:slf4j-nop:2.0.9")
     testImplementation(kotlin("test-junit"))
+    testImplementation("io.kotest:kotest-property:6.2.5")
 }
 
 kotlin {

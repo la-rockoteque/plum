@@ -34,11 +34,13 @@ domains. Binding to a real domain is Claude's job at teaching time, driven by ea
 
 | Language | Directory | Tests |
 |---|---|---|
-| Python 3.12+ | `examples/python` | `python -m venv .venv && .venv/bin/pip install 'pytest>=8' 'SQLAlchemy==2.0.53' && .venv/bin/pytest -q` |
+| Python 3.12+ | `examples/python` | `python -m venv .venv && .venv/bin/pip install 'pytest>=8' 'SQLAlchemy==2.0.53' 'hypothesis==6.168.3' && .venv/bin/pytest -q` |
 | .NET 10 | `examples/dotnet` | `dotnet test RepositoryExample.Tests` |
 | TypeScript (Node 22.10+) | `examples/typescript` | `npm ci && npm test` |
 | Go 1.25+ | `examples/go` | `go test ./...` |
 | Kotlin (JDK 17) | `examples/kotlin` | `./gradlew test` |
+| React (Node 22.10+) | `examples/react` | `npm ci && npm test` |
+| Infra (Docker, Terraform) | `examples/infra` | `./check-all.sh` |
 
 Each manifest's `examples.<lang>.run` gives the concept's demo command.
 
@@ -54,4 +56,5 @@ Each manifest's `examples.<lang>.run` gives the concept's demo command.
    - `checks` — explain-back questions. Each should need understanding to answer, not recall of a name.
 3. **Narrative.** Write `concepts/<id>/CONCEPT.md`: problem → idea → roles table ("what to look for in a real
    repo") → stage walk → trade-offs / when not to → misconceptions. Keep it free of language-specific paths.
-4. `bun test src` validates every manifest: required fields, cross-links, and that each referenced file exists.
+4. Follow [CONVENTIONS.md](CONVENTIONS.md) — layout, collision rules, allowed libraries, definition of done.
+   `bun test src` validates every manifest.
