@@ -33,8 +33,8 @@ everything, then test it" skip the part of the discipline that keeps each step c
 |---|---|---|
 | The new requirement | "a shipped order can't be cancelled" | A rule described in a ticket or review comment with no matching test yet |
 | The red test | a test asserting today's behaviour, named for the flaw | A test whose name states a problem, not a success |
-| The guard | the minimal, crude fix | An inline comparison duplicated at each call site instead of named once |
-| The refactor | the same rule, given a name and one home | A method or type that states the rule instead of restating the check |
+| The guard | the minimal, crude fix | A bare comparison written where the decision is made, instead of given a name |
+| The refactor | the same rule, given a name and one home | A method that states the rule instead of restating the check |
 | The safety net | the test suite, unchanged across green → refactor | Tests that still pass after a refactor with no edits to the tests themselves |
 
 ## Walk the stages
@@ -46,10 +46,11 @@ everything, then test it" skip the part of the discipline that keeps each step c
 2. **green** — a guard appears exactly where the decision is made, phrased as directly as possible (a bare status
    comparison). It is not elegant, and that is fine: the only job of this stage is to turn the red assertion into
    a green one. Notice what didn't change: nothing about the rest of the module moved.
-3. **refactor** — the same guard becomes a named concept (a `canCancel()` query, an explicit status enum). Behaviour
-   is identical to green: the same two cases — a pending order still cancels, a shipped order still doesn't — are
-   asserted again, unchanged, against the new shape. That repetition is the point: the tests are the proof that
-   refactoring didn't quietly change what the code does.
+3. **refactor** — the same guard becomes a named concept (a `canCancel()` query). The constructor and the type of
+   `status` stay exactly as they were in green — only the check inside `cancel()` changes, from a bare comparison
+   to a call to the named query. Because the public shape is unchanged, the *same* test body — not a rewritten
+   copy of it — runs against green and refactor: one test case, two subjects. That is the proof that refactoring
+   didn't quietly change what the code does; a rewritten test would only prove the new test passes.
 
 ## Trade-offs / when not to
 

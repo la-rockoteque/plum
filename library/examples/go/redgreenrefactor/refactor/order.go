@@ -1,24 +1,17 @@
-// Package refactor: same behaviour as green, named and in one place.
+// Package refactor: same behaviour as green, named and in one place instead of a bare comparison inside Cancel.
+// The public shape is identical to green: NewOrder takes a string, Order.Status is a string.
 package refactor
 
 import "errors"
 
-type OrderStatus string
-
-const (
-	Pending   OrderStatus = "pending"
-	Shipped   OrderStatus = "shipped"
-	Cancelled OrderStatus = "cancelled"
-)
-
-// The rule, named instead of a string compare buried in Cancel.
-var nonCancellableStatuses = map[OrderStatus]bool{Shipped: true}
+// nonCancellableStatuses names the rule instead of a bare comparison inside Cancel — internal only.
+var nonCancellableStatuses = map[string]bool{"shipped": true}
 
 type Order struct {
-	Status OrderStatus
+	Status string
 }
 
-func NewOrder(status OrderStatus) *Order {
+func NewOrder(status string) *Order {
 	return &Order{Status: status}
 }
 
@@ -30,6 +23,6 @@ func (o *Order) Cancel() error {
 	if !o.CanCancel() {
 		return errors.New("a shipped order can't be cancelled")
 	}
-	o.Status = Cancelled
+	o.Status = "cancelled"
 	return nil
 }

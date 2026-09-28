@@ -1,24 +1,19 @@
 namespace RepositoryExample.RedGreenRefactor.Refactor;
 
-public enum OrderStatus
+// Same behaviour as Green, named and in one place instead of a bare comparison inside Cancel. The public shape
+// is identical to Green: the constructor takes a string, and Status is a string.
+public sealed class Order(string status = "pending")
 {
-    Pending,
-    Shipped,
-    Cancelled,
-}
+    // The rule, named instead of a bare comparison inside Cancel — internal only.
+    private static readonly HashSet<string> NonCancellableStatuses = ["shipped"];
 
-// Same behaviour as Green, named and in one place.
-public sealed class Order(OrderStatus status = OrderStatus.Pending)
-{
-    private static readonly HashSet<OrderStatus> NonCancellableStatuses = [OrderStatus.Shipped];
-
-    public OrderStatus Status { get; private set; } = status;
+    public string Status { get; private set; } = status;
 
     public bool CanCancel() => !NonCancellableStatuses.Contains(Status);
 
     public void Cancel()
     {
         if (!CanCancel()) throw new InvalidOperationException("a shipped order can't be cancelled");
-        Status = OrderStatus.Cancelled;
+        Status = "cancelled";
     }
 }

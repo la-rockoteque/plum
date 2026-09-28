@@ -7,7 +7,7 @@
   "summary": "A failing test for a new rule, the smallest change that passes it, then a cleanup pass the tests protect.",
   "prerequisites": [],
   "related": [
-    "repository"
+    "test-doubles"
   ],
   "signals": [
     "production changes with no test in the same commit",
@@ -21,7 +21,7 @@
     "a shipped order can't be cancelled": "the new requirement driving the cycle",
     "the red test": "the new assertion, written before the code satisfies it",
     "the guard": "the minimal production change that makes the red test pass",
-    "canCancel() / OrderStatus": "the refactor: the same rule, named and in one place"
+    "canCancel()": "the refactor: the same rule, named and pulled out of cancel(), behind the same public shape as green"
   },
   "stages": [
     {
@@ -95,8 +95,7 @@
       },
       "tests": [
         "redgreenrefactor/red/order_test.go",
-        "redgreenrefactor/green/order_test.go",
-        "redgreenrefactor/refactor/order_test.go"
+        "redgreenrefactor/behaviour/order_test.go"
       ],
       "run": "go test ./redgreenrefactor/..."
     },

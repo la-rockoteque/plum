@@ -1,7 +1,6 @@
 using GreenOrder = RepositoryExample.RedGreenRefactor.Green.Order;
 using RedOrder = RepositoryExample.RedGreenRefactor.Red.Order;
 using RefactorOrder = RepositoryExample.RedGreenRefactor.Refactor.Order;
-using RefactorOrderStatus = RepositoryExample.RedGreenRefactor.Refactor.OrderStatus;
 using Xunit;
 
 namespace RepositoryExample.Tests;
@@ -17,37 +16,44 @@ public class RedGreenRefactorTests
         Assert.Equal("cancelled", order.Status);
     }
 
-    [Fact]
-    public void Green_CancellingAPendingOrderSucceeds()
+    // One shared test body runs against both stages: green and refactor must behave identically.
+    public static IEnumerable<object[]> GreenAndRefactorFactories()
     {
-        var order = new GreenOrder("pending");
-        order.Cancel();
-        Assert.Equal("cancelled", order.Status);
+        yield return new object[]
+        {
+            "green",
+            (Func<string, (Action Cancel, Func<string> Status)>)(status =>
+            {
+                var order = new GreenOrder(status);
+                return (order.Cancel, () => order.Status);
+            }),
+        };
+        yield return new object[]
+        {
+            "refactor",
+            (Func<string, (Action Cancel, Func<string> Status)>)(status =>
+            {
+                var order = new RefactorOrder(status);
+                return (order.Cancel, () => order.Status);
+            }),
+        };
     }
 
-    [Fact]
-    public void Green_CancellingAShippedOrderIsRejected()
+    [Theory]
+    [MemberData(nameof(GreenAndRefactorFactories))]
+    public void CancellingAPendingOrderSucceeds(string stage, Func<string, (Action Cancel, Func<string> Status)> build)
     {
-        var order = new GreenOrder("shipped");
-        Assert.Throws<InvalidOperationException>(order.Cancel);
-        Assert.Equal("shipped", order.Status);
+        var (cancel, status) = build("pending");
+        cancel();
+        Assert.True(status() == "cancelled", $"{stage}: got status {status()}, want cancelled");
     }
 
-    [Fact]
-    public void Refactor_CancellingAPendingOrderSucceeds()
+    [Theory]
+    [MemberData(nameof(GreenAndRefactorFactories))]
+    public void CancellingAShippedOrderIsRejected(string stage, Func<string, (Action Cancel, Func<string> Status)> build)
     {
-        // Same case as Green, run against the refactored design.
-        var order = new RefactorOrder(RefactorOrderStatus.Pending);
-        order.Cancel();
-        Assert.Equal(RefactorOrderStatus.Cancelled, order.Status);
-    }
-
-    [Fact]
-    public void Refactor_CancellingAShippedOrderIsRejected()
-    {
-        // Same case as Green, run against the refactored design.
-        var order = new RefactorOrder(RefactorOrderStatus.Shipped);
-        Assert.Throws<InvalidOperationException>(order.Cancel);
-        Assert.Equal(RefactorOrderStatus.Shipped, order.Status);
+        var (cancel, status) = build("shipped");
+        Assert.Throws<InvalidOperationException>(cancel);
+        Assert.True(status() == "shipped", $"{stage}: got status {status()}, want shipped");
     }
 }
