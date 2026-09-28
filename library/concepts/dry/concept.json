@@ -1,0 +1,115 @@
+{
+  "id": "dry",
+  "title": "DRY — Don't Repeat Yourself",
+  "category": "principles",
+  "domain": "implementation",
+  "level": "foundation",
+  "summary": "Every piece of knowledge should have one authoritative place to live, so a rule fixed once is fixed everywhere.",
+  "prerequisites": [],
+  "related": [
+    "repository"
+  ],
+  "signals": [
+    "the same conditional (status checks, date-window math) repeated across two handlers or controllers",
+    "a bug-fix commit that edits one of two near-identical functions but not the other",
+    "call sites that re-derive a business rule instead of asking the domain object",
+    "grep hits for the same comparison/branch across multiple entry points"
+  ],
+  "roles": {
+    "Order.canBeCancelled": "single owner of the business rule",
+    "CliCancelHandler": "entry point that used to duplicate the rule",
+    "ApiCancelHandler": "entry point that used to duplicate the rule",
+    "Clock": "injected seam for testing a time-based rule without the wall clock"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "Copy-pasted rule",
+      "idea": "The CLI and API handlers each re-implement 'can this order be cancelled?'; a fix to one copy leaves the other behind."
+    },
+    {
+      "id": "after",
+      "title": "One rule, two callers",
+      "idea": "The rule lives once on the order; both handlers call it and agree by construction."
+    }
+  ],
+  "checks": [
+    "Two functions look identical today — what would tell you this is coincidental duplication rather than a DRY violation?",
+    "Why does the cancellation rule belong on the order rather than in the CLI or API handler?",
+    "What is the 'rule of three', and how does it guard against premature abstraction?",
+    "DRY is about knowledge, not text — give an example of two identical-looking blocks that should stay duplicated."
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/dry/before.py"
+        ],
+        "after": [
+          "src/dry/after.py"
+        ]
+      },
+      "tests": [
+        "tests/test_dry.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_dry.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/dry/before.ts"
+        ],
+        "after": [
+          "src/dry/after.ts"
+        ]
+      },
+      "tests": [
+        "tests/dry.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/dry.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "dry/before/order.go"
+        ],
+        "after": [
+          "dry/after/order.go"
+        ]
+      },
+      "tests": [
+        "dry/before/order_test.go",
+        "dry/after/order_test.go"
+      ],
+      "run": "go test ./dry/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/Dry/Before/Order.cs"
+        ],
+        "after": [
+          "RepositoryExample/Dry/After/Order.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/DryTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.DryTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/dry/before/Order.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/dry/after/Order.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/DryTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.DryTest'"
+    }
+  }
+}
