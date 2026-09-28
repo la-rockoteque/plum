@@ -4,7 +4,7 @@
   "category": "principles",
   "domain": "architecture",
   "level": "foundation",
-  "summary": "When a service reaches into another object's fields to decide something, that knowledge belongs with the object instead.",
+  "summary": "When a service reaches into another object's fields to decide something, a change to that object's representation ripples into every place that read it.",
   "prerequisites": [],
   "related": [
     "dependency-inversion"
@@ -12,25 +12,26 @@
   "signals": [
     "a method in one class reading three or more fields of another class to make a decision",
     "the same interpretation of another object's data duplicated in more than one method or class",
-    "a bug where one copy of a duplicated rule was updated and another copy was not",
+    "a schema or type migration (a field's unit, or a raw string becoming a value type) that forces edits everywhere a collaborator reached into the old shape",
     "long parameter lists or field chains built from a single collaborator's data instead of passing that collaborator"
   ],
   "roles": {
     "OrderService": "collaborator that reaches into another object's data (feature envy)",
     "Customer": "object that owns the data — and, after the fix, the behaviour about it",
-    "cancellationDiscount": "narrow method the collaborator calls instead of reading fields directly",
-    "tier / lifetimeSpend / yearsAsMember": "internal representation that should be the owning object's own business"
+    "loyaltyDiscount": "narrow method, named after the customer's own question, that the collaborator calls instead of reading fields directly",
+    "tier / lifetimeSpendMinor / yearsAsMember": "internal representation that should be the owning object's own business",
+    "MigratedCustomer / LoyaltyTier": "a second representation (tier as a value type) that stands in for a real-world schema migration"
   },
   "stages": [
     {
       "id": "before",
       "title": "Feature envy",
-      "idea": "OrderService reaches into Customer's tier, spend and membership length to price a cancellation, then copies the same rule again for a receipt line."
+      "idea": "OrderService reaches into Customer's tier, spend and membership length to price a cancellation, then reads the same fields again for a receipt line. When Customer's tier becomes a value type, OrderService can't reuse either method — it needs a third one just to read the new shape."
     },
     {
       "id": "after",
       "title": "Behaviour moves to its data",
-      "idea": "Customer answers its own question — what discount do I get? — and OrderService collaborates through that one narrow method."
+      "idea": "Customer answers its own question — what loyalty discount do I get? — and OrderService collaborates through that one narrow, structurally-typed method. A second Customer representation plugs straight in; OrderService never changes."
     }
   ],
   "checks": [

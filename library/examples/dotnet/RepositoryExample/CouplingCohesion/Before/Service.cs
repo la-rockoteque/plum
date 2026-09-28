@@ -1,41 +1,67 @@
 namespace RepositoryExample.CouplingCohesion.Before;
 
-// Teaching artifact: the service reaches into the customer's fields to compute a discount,
-// and the rule gets duplicated (and drifts) because nothing owns it but the service.
+// Teaching artifact: the service reaches into the customer's fields to compute a discount.
+// When Customer's tier becomes a value type instead of a raw string, OrderService can't
+// reuse its existing logic on the new shape - it needs a whole new method just to read it.
+
+public enum LoyaltyTier
+{
+    Gold,
+    Silver,
+    Bronze,
+}
 
 // The customer's data is public because the service reaches straight into it.
 public sealed class Customer
 {
     public required string Tier { get; init; }
-    public required double LifetimeSpend { get; init; }
+    public required int LifetimeSpendMinor { get; init; }
+    public required int YearsAsMember { get; init; }
+}
+
+// Same facts as Customer, after a migration - Tier is now the value type, not a string.
+public sealed class MigratedCustomer
+{
+    public required LoyaltyTier Tier { get; init; }
+    public required int LifetimeSpendMinor { get; init; }
     public required int YearsAsMember { get; init; }
 }
 
 public sealed class Order
 {
-    public required double Amount { get; init; }
+    public required int AmountMinor { get; init; }
     public required Customer Customer { get; init; }
 }
 
 public sealed class OrderService
 {
-    public double CancellationFee(Order order)
+    public int CancellationFee(Order order)
     {
         // Feature envy: three of the customer's fields, read here instead of asked for.
         var customer = order.Customer;
-        double discount = customer.Tier == "gold" ? 0.25
-            : customer.LifetimeSpend >= 1000 ? 0.125
-            : customer.YearsAsMember >= 2 ? 0.0625
+        int discountBps = customer.Tier == "gold" ? 2000
+            : customer.LifetimeSpendMinor >= 100_000 ? 1000
+            : customer.YearsAsMember >= 2 ? 500
             : 0;
-        return order.Amount * (1 - discount);
+        return order.AmountMinor * (10_000 - discountBps) / 10_000;
     }
 
-    public double LoyaltyDiscount(Customer customer)
+    public int LoyaltyDiscount(Customer customer)
     {
-        // The same rule, copied for a receipt line — and it has drifted (`>` vs `>=`).
-        if (customer.Tier == "gold") return 0.25;
-        if (customer.LifetimeSpend > 1000) return 0.125;
-        if (customer.YearsAsMember >= 2) return 0.0625;
+        // The same interpretation, read again for a receipt line.
+        if (customer.Tier == "gold") return 2000;
+        if (customer.LifetimeSpendMinor >= 100_000) return 1000;
+        if (customer.YearsAsMember >= 2) return 500;
+        return 0;
+    }
+
+    // Exists only because Customer's tier became a value type - OrderService gained a whole
+    // new method just to read it, because the interpretation lives here, not on Customer.
+    public int MigratedLoyaltyDiscount(MigratedCustomer customer)
+    {
+        if (customer.Tier == LoyaltyTier.Gold) return 2000;
+        if (customer.LifetimeSpendMinor >= 100_000) return 1000;
+        if (customer.YearsAsMember >= 2) return 500;
         return 0;
     }
 }

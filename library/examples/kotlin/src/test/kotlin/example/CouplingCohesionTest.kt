@@ -1,9 +1,13 @@
 package example
 
 import example.couplingcohesion.after.Customer as AfterCustomer
+import example.couplingcohesion.after.LoyaltyTier as AfterLoyaltyTier
+import example.couplingcohesion.after.MigratedCustomer as AfterMigratedCustomer
 import example.couplingcohesion.after.Order as AfterOrder
 import example.couplingcohesion.after.OrderService as AfterOrderService
 import example.couplingcohesion.before.Customer as BeforeCustomer
+import example.couplingcohesion.before.LoyaltyTier as BeforeLoyaltyTier
+import example.couplingcohesion.before.MigratedCustomer as BeforeMigratedCustomer
 import example.couplingcohesion.before.Order as BeforeOrder
 import example.couplingcohesion.before.OrderService as BeforeOrderService
 import kotlin.test.Test
@@ -11,38 +15,45 @@ import kotlin.test.assertEquals
 
 class CouplingCohesionTest {
     @Test
-    fun `before - cancellation fee reads the customers tier and spend directly`() {
-        val customer = BeforeCustomer(tier = "gold", lifetimeSpend = 500.0, yearsAsMember = 1)
-        val order = BeforeOrder(amount = 100.0, customer = customer)
+    fun `before - cancellation fee and loyalty discount read the customers fields directly`() {
+        val gold = BeforeCustomer(tier = "gold", lifetimeSpendMinor = 50_000, yearsAsMember = 1)
+        val order = BeforeOrder(amountMinor = 10_000, customer = gold)
         val service = BeforeOrderService()
-        assertEquals(75.0, service.cancellationFee(order))
-        assertEquals(0.25, service.loyaltyDiscount(customer))
+        assertEquals(8_000, service.cancellationFee(order))
+        assertEquals(2000, service.loyaltyDiscount(gold))
+
+        val bigSpender = BeforeCustomer(tier = "bronze", lifetimeSpendMinor = 150_000, yearsAsMember = 0)
+        assertEquals(1000, service.loyaltyDiscount(bigSpender))
     }
 
     @Test
-    fun `before - cancellation fee and loyalty discount disagree at the spend boundary`() {
-        val customer = BeforeCustomer(tier = "bronze", lifetimeSpend = 1000.0, yearsAsMember = 0)
-        val order = BeforeOrder(amount = 200.0, customer = customer)
+    fun `before - a migrated customer representation needs its own order service method`() {
+        val migrated = BeforeMigratedCustomer(tier = BeforeLoyaltyTier.GOLD, lifetimeSpendMinor = 50_000, yearsAsMember = 1)
         val service = BeforeOrderService()
-        assertEquals(175.0, service.cancellationFee(order)) // 12.5% discount applied
-        assertEquals(0.0, service.loyaltyDiscount(customer)) // same customer, no discount at all
+        // Customer's tier became a value type; OrderService had to gain a whole new method to
+        // read it - the change cost of reaching into Customer's representation instead of asking.
+        assertEquals(2000, service.migratedLoyaltyDiscount(migrated))
     }
 
     @Test
     fun `after - cancellation fee asks the customer for its own discount`() {
-        val customer = AfterCustomer(tier = "gold", lifetimeSpend = 500.0, yearsAsMember = 1)
-        val order = AfterOrder(amount = 100.0, customer = customer)
+        val gold = AfterCustomer(tier = "gold", lifetimeSpendMinor = 50_000, yearsAsMember = 1)
+        val order = AfterOrder(amountMinor = 10_000, customer = gold)
         val service = AfterOrderService()
-        assertEquals(75.0, service.cancellationFee(order))
-        assertEquals(0.25, service.loyaltyDiscount(customer))
+        assertEquals(8_000, service.cancellationFee(order))
+        assertEquals(2000, service.loyaltyDiscount(gold))
+
+        val bigSpender = AfterCustomer(tier = "bronze", lifetimeSpendMinor = 150_000, yearsAsMember = 0)
+        assertEquals(1000, service.loyaltyDiscount(bigSpender))
     }
 
     @Test
-    fun `after - cancellation fee and loyalty discount agree at the spend boundary`() {
-        val customer = AfterCustomer(tier = "bronze", lifetimeSpend = 1000.0, yearsAsMember = 0)
-        val order = AfterOrder(amount = 200.0, customer = customer)
+    fun `after - order service needs no changes for a migrated customer representation`() {
+        val migrated = AfterMigratedCustomer(tier = AfterLoyaltyTier.GOLD, lifetimeSpendMinor = 50_000, yearsAsMember = 1)
+        val order = AfterOrder(amountMinor = 10_000, customer = migrated)
         val service = AfterOrderService()
-        assertEquals(175.0, service.cancellationFee(order))
-        assertEquals(0.125, service.loyaltyDiscount(customer))
+        // Same OrderService code, unedited, gives the same answer for the new representation.
+        assertEquals(8_000, service.cancellationFee(order))
+        assertEquals(2000, service.loyaltyDiscount(migrated))
     }
 }

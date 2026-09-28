@@ -1,39 +1,77 @@
-// Package after: the customer owns the question "what discount do I get?"; the service only
-// asks it.
+// Package after: Customer answers its own question - what loyalty discount do I get?
+// OrderService only asks, through an interface, so it never cares which representation of
+// Customer answers.
 package after
 
-type Customer struct {
-	Tier          string
-	LifetimeSpend float64
-	YearsAsMember int
+// LoyaltyTier is the value type Customer's tier migrated to.
+type LoyaltyTier string
+
+const (
+	Gold   LoyaltyTier = "gold"
+	Silver LoyaltyTier = "silver"
+	Bronze LoyaltyTier = "bronze"
+)
+
+// DiscountEligible is satisfied by any Customer representation that can answer its own
+// loyalty discount.
+type DiscountEligible interface {
+	LoyaltyDiscount() int
 }
 
-// CancellationDiscount is the one place that knows how tier, spend and membership translate
-// into a discount.
-func (c Customer) CancellationDiscount() float64 {
+type Customer struct {
+	Tier               string
+	LifetimeSpendMinor int
+	YearsAsMember      int
+}
+
+// LoyaltyDiscount is the one place that knows how tier, spend and membership translate into
+// a discount.
+func (c Customer) LoyaltyDiscount() int {
 	switch {
 	case c.Tier == "gold":
-		return 0.25
-	case c.LifetimeSpend >= 1000:
-		return 0.125
+		return 2000
+	case c.LifetimeSpendMinor >= 100_000:
+		return 1000
 	case c.YearsAsMember >= 2:
-		return 0.0625
+		return 500
+	default:
+		return 0
+	}
+}
+
+// MigratedCustomer asks the same question with a different internal shape - Tier is the
+// value type, not a string.
+type MigratedCustomer struct {
+	Tier               LoyaltyTier
+	LifetimeSpendMinor int
+	YearsAsMember      int
+}
+
+func (c MigratedCustomer) LoyaltyDiscount() int {
+	switch {
+	case c.Tier == Gold:
+		return 2000
+	case c.LifetimeSpendMinor >= 100_000:
+		return 1000
+	case c.YearsAsMember >= 2:
+		return 500
 	default:
 		return 0
 	}
 }
 
 type Order struct {
-	Amount   float64
-	Customer Customer
+	AmountMinor int
+	Customer    DiscountEligible
 }
 
 type OrderService struct{}
 
-func (OrderService) CancellationFee(order Order) float64 {
-	return order.Amount * (1 - order.Customer.CancellationDiscount())
+func (OrderService) CancellationFee(order Order) int {
+	discountBps := order.Customer.LoyaltyDiscount()
+	return order.AmountMinor * (10_000 - discountBps) / 10_000
 }
 
-func (OrderService) LoyaltyDiscount(customer Customer) float64 {
-	return customer.CancellationDiscount()
+func (OrderService) LoyaltyDiscount(customer DiscountEligible) int {
+	return customer.LoyaltyDiscount()
 }
