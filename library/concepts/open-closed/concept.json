@@ -1,0 +1,138 @@
+{
+  "id": "open-closed",
+  "title": "Open–Closed Principle",
+  "category": "principles",
+  "domain": "architecture",
+  "level": "foundation",
+  "summary": "A module should be open for extension but closed for modification, so adding a new case adds code instead of editing it.",
+  "prerequisites": [
+    "single-responsibility"
+  ],
+  "related": [
+    "dependency-inversion"
+  ],
+  "signals": [
+    "the same type switch repeated across files (a fee calculator and a refund-message builder both branch on the same enum)",
+    "a code-review comment saying \"you also need to update the switch in the other file\"",
+    "a bug where one branch of a type switch was updated and a sibling switch elsewhere was not",
+    "adding a new case to a domain concept requires editing several existing classes instead of adding one new one"
+  ],
+  "roles": {
+    "CancellationFeeCalculator (before)": "one switch on order type, duplicated logic that must stay in sync with a second switch elsewhere",
+    "RefundDescription (before)": "a second switch on the same order type, patched independently of the fee switch and now out of sync",
+    "FeePolicy (after)": "the extension point — one small interface every order type implements",
+    "StandardFeePolicy / ExpressFeePolicy / CustomMadeFeePolicy / SubscriptionFeePolicy (after)": "one policy per existing type, each owning its own fee and refund description",
+    "CancellationFeeCalculator (after)": "chooses a policy from a map by order type; adding a type means adding an entry, not a branch"
+  },
+  "stages": [
+    {
+      "id": "before",
+      "title": "One switch, then a second one",
+      "idea": "CancellationFeeCalculator branches on order.type to compute the fee; RefundDescription branches on the same order.type for the customer-facing message, but was never updated when custom-made orders were added."
+    },
+    {
+      "id": "after",
+      "title": "One policy per type, chosen once",
+      "idea": "Each order type is a FeePolicy owning both its fee and its refund description; the calculator picks one from a map. A new type is a new policy added to the map — no existing file changes."
+    }
+  ],
+  "checks": [
+    "In the before code, what already-shipped bug shows that duplicating a type switch is worse than duplicating ordinary code? Why does it stay hidden until someone reads both switches side by side?",
+    "\"Closed for modification\" cannot mean \"never edit this code again\" — the after stage's calculator was written once and never touched to add the gift policy. State what specifically stays unedited when a new order type is added, and what is allowed to change.",
+    "Meyer's original open-closed principle relied on inheritance-based extension; Martin's version prefers implementing an interface plumbed in through composition. What does the after stage's FeePolicy map buy over subclassing CancellationFeeCalculator for each order type?",
+    "If cancellation fees only ever had one order type in production and a second was purely hypothetical, would introducing FeePolicy before a second type exists be a good application of this principle? Why or why not?"
+  ],
+  "examples": {
+    "python": {
+      "stages": {
+        "before": [
+          "src/open_closed/before/order.py",
+          "src/open_closed/before/fee_calculator.py",
+          "src/open_closed/before/refund_description.py"
+        ],
+        "after": [
+          "src/open_closed/after/order.py",
+          "src/open_closed/after/fee_policy.py",
+          "src/open_closed/after/cancellation_fee_calculator.py"
+        ]
+      },
+      "tests": [
+        "tests/test_open_closed.py"
+      ],
+      "run": ".venv/bin/pytest -q tests/test_open_closed.py"
+    },
+    "typescript": {
+      "stages": {
+        "before": [
+          "src/open-closed/before/order.ts",
+          "src/open-closed/before/fee-calculator.ts",
+          "src/open-closed/before/refund-description.ts"
+        ],
+        "after": [
+          "src/open-closed/after/order.ts",
+          "src/open-closed/after/fee-policy.ts",
+          "src/open-closed/after/cancellation-fee-calculator.ts"
+        ]
+      },
+      "tests": [
+        "tests/open-closed.test.ts"
+      ],
+      "run": "npm run build && node --experimental-sqlite --test dist/tests/open-closed.test.js"
+    },
+    "go": {
+      "stages": {
+        "before": [
+          "openclosed/before/order.go",
+          "openclosed/before/fee_calculator.go",
+          "openclosed/before/refund_description.go"
+        ],
+        "after": [
+          "openclosed/after/order.go",
+          "openclosed/after/fee_policy.go",
+          "openclosed/after/cancellation_fee_calculator.go"
+        ]
+      },
+      "tests": [
+        "openclosed/before/fee_calculator_test.go",
+        "openclosed/after/cancellation_fee_calculator_test.go"
+      ],
+      "run": "go test ./openclosed/..."
+    },
+    "dotnet": {
+      "stages": {
+        "before": [
+          "RepositoryExample/OpenClosed/Before/Order.cs",
+          "RepositoryExample/OpenClosed/Before/CancellationFeeCalculator.cs",
+          "RepositoryExample/OpenClosed/Before/RefundDescription.cs"
+        ],
+        "after": [
+          "RepositoryExample/OpenClosed/After/Order.cs",
+          "RepositoryExample/OpenClosed/After/FeePolicy.cs",
+          "RepositoryExample/OpenClosed/After/CancellationFeeCalculator.cs"
+        ]
+      },
+      "tests": [
+        "RepositoryExample.Tests/OpenClosedTests.cs"
+      ],
+      "run": "dotnet test RepositoryExample.Tests --filter FullyQualifiedName~RepositoryExample.Tests.OpenClosedTests."
+    },
+    "kotlin": {
+      "stages": {
+        "before": [
+          "src/main/kotlin/example/openclosed/before/Order.kt",
+          "src/main/kotlin/example/openclosed/before/FeeCalculator.kt",
+          "src/main/kotlin/example/openclosed/before/RefundDescription.kt"
+        ],
+        "after": [
+          "src/main/kotlin/example/openclosed/after/Order.kt",
+          "src/main/kotlin/example/openclosed/after/FeePolicy.kt",
+          "src/main/kotlin/example/openclosed/after/CancellationFeeCalculator.kt"
+        ]
+      },
+      "tests": [
+        "src/test/kotlin/example/OpenClosedTest.kt"
+      ],
+      "run": "./gradlew test --tests 'example.OpenClosedTest'"
+    }
+  }
+}
