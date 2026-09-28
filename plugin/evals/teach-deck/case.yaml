@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: teach-deck
+description: /plum:teach on a small repo uses the helpers and renders a deck from a plan, never hand-written HTML
+tags: [teach, expensive]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 30
+  timeout_seconds: 900
+  allowed_tools: [Skill, Bash, Read, Write]
+  env:
+    EVAL_PLUM_DATA_DIR: .plum-eval
+prompt: |
+  Teach me the repository pattern using this repo. Render the deck, but don't publish it anywhere.
