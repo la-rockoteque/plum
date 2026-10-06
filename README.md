@@ -88,7 +88,7 @@ patterns also ask for permission before the tool runs.
 Plum ships as a Claude Code plugin; this repo is its own marketplace. Requires [Bun](https://bun.sh) 1.x.
 
 ```sh
-claude plugin marketplace add git@git.nexapptech.com:vbernier/plum.git --sparse .claude-plugin plugin
+claude plugin marketplace add https://github.com/la-rockoteque/plum.git --sparse .claude-plugin plugin
 claude plugin install plum@plum            # add --scope project to enable it for one repo only
 ```
 
