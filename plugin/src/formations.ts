@@ -34,10 +34,13 @@ export function matchFormations(concept: string, formations = loadFormations()):
 }
 
 // Non-cone sparse patterns: what a learner's copy needs, never solutions/.
+// A curriculum lives at curricula/<domain>/<track>/ and may use the domain's shared modules in curricula/<domain>/modules/.
 export function sparsePatterns(f: Formation, lang?: string): string[] {
   const root = `/${f.root}`;
+  const shared = `${root.slice(0, root.lastIndexOf("/"))}/modules/`;
   return ["/CLAUDE.md", "/.claude/settings.json", "/.claude/skills/", "/learner/.gitkeep",
-    `${root}/curriculum.md`, `${root}/modules/`, `${root}/questions/`, `${root}/docs/`, lang ? `${root}/project/${lang}/` : `${root}/project/`];
+    `${root}/curriculum.md`, `${root}/modules/`, `${root}/questions/`, `${root}/docs/`, shared,
+    lang ? `${root}/project/${lang}/` : `${root}/project/`];
 }
 
 export function fetchFormation(id: string, lang: string | undefined, dirArg?: string): string {

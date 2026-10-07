@@ -2,8 +2,8 @@
   "architecture-backend": {
     "title": "Formation Architecture backend",
     "repoUrl": "git@git.nexapptech.com:internal/formation-frontend.git",
-    "ref": "b413f7b1de0e1a0df37657934afeb14b3b628652",
-    "root": "curricula/architecture-backend",
+    "ref": "000250917eed632423d44f81d1991088be1e9276",
+    "root": "curricula/backend/architecture",
     "languages": [
       "python",
       "dotnet",
@@ -33,8 +33,8 @@
   "frontend": {
     "title": "Formation Frontend",
     "repoUrl": "git@git.nexapptech.com:internal/formation-frontend.git",
-    "ref": "b413f7b1de0e1a0df37657934afeb14b3b628652",
-    "root": "curricula/frontend",
+    "ref": "000250917eed632423d44f81d1991088be1e9276",
+    "root": "curricula/frontend/react",
     "modules": {
       "07-testing": [
         "testing-through-public-api",

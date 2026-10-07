@@ -26,7 +26,8 @@ library/
 | `unit-of-work` | backend | save-per-call → one transaction |
 
 Examples exist in Python, C#/.NET, TypeScript, Go and Kotlin. They were imported from the
-`formation-backend` mentoring repo (commit `b728329`) and share one tiny domain: **cancel an order**.
+`formation-backend` mentoring repo (commit `b728329`), now archived. That curriculum lives on in
+`internal/formation-frontend` under `curricula/backend/architecture`. The examples share one tiny domain: **cancel an order**.
 That shared domain is deliberate — every concept builds on the one before, so learners compare stages, not
 domains. Binding to a real domain is Claude's job at teaching time, driven by each manifest's `roles`.
 

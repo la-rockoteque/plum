@@ -6,7 +6,7 @@ import { join } from "path";
 import { matchFormations, sparsePatterns, type Formation } from "./formations.js";
 
 const formation = (repoUrl: string, ref: string): Formation => ({
-  title: "Formation Architecture backend", repoUrl, ref, root: "curricula/architecture-backend",
+  title: "Formation Architecture backend", repoUrl, ref, root: "curricula/backend/architecture",
   languages: ["python", "go"], modules: { "01-repository": ["repository", "test-doubles"], "03-cqrs": ["cqrs"] }
 });
 
@@ -35,11 +35,11 @@ function write(base: string, files: string[]): void {
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "plum-formations-"));
   const repo = join(home, "remote.git"), work = join(home, "work");
-  const c = "curricula/architecture-backend";
+  const c = "curricula/backend/architecture";
   write(work, ["CLAUDE.md", ".claude/settings.json", ".claude/skills/start/SKILL.md", "learner/.gitkeep",
     `${c}/curriculum.md`, `${c}/modules/01-repository.md`, `${c}/questions/repository.md`, `${c}/docs/stack.md`,
     `${c}/project/go/main.go`, `${c}/project/python/main.py`, `${c}/solutions/01-repository.md`,
-    "curricula/frontend/curriculum.md"]);
+    "curricula/backend/modules/sql/01-sql.md", "curricula/frontend/react/curriculum.md", "curricula/frontend/modules/testing-library/07-testing.md"]);
   git(home, "init", "-q", "--bare", "-b", "main", repo);
   git(home, "init", "-q", "-b", "main", work);
   git(work, "add", "."); git(work, "commit", "-qm", "formation");
@@ -57,17 +57,18 @@ function plum(...args: string[]): { out: string; code: number } {
   return { out: p.stdout.toString() + p.stderr.toString(), code: p.exitCode ?? 0 };
 }
 
-test("fetch checks out the coach and one language's curriculum, never solutions", () => {
+test("fetch checks out the coach, one language's curriculum and its domain's shared modules, never solutions", () => {
   const dest = join(home, "learn");
   const r = plum("fetch", "architecture-backend", "--lang", "go", "--dir", dest);
   expect(r.code).toBe(0);
-  const c = join(dest, "curricula/architecture-backend");
+  const c = join(dest, "curricula/backend/architecture");
   for (const f of ["CLAUDE.md", ".claude/skills/start/SKILL.md", "learner/.gitkeep"]) expect(existsSync(join(dest, f))).toBe(true);
   for (const f of ["curriculum.md", "modules/01-repository.md", "questions/repository.md", "docs/stack.md", "project/go/main.go"]) {
     expect(existsSync(join(c, f))).toBe(true);
   }
   expect(existsSync(join(c, "solutions"))).toBe(false);
   expect(existsSync(join(c, "project/python"))).toBe(false);
+  expect(existsSync(join(dest, "curricula/backend/modules/sql/01-sql.md"))).toBe(true);
   expect(existsSync(join(dest, "curricula/frontend"))).toBe(false);
 });
 
@@ -90,6 +91,6 @@ test("fetch rejects a language the formation has no starter for", () => {
 test("a formation with a single starter fetches the whole project/, still without solutions", () => {
   const f = formation("/r", "main");
   const single: Formation = { title: f.title, repoUrl: f.repoUrl, ref: f.ref, root: f.root, modules: f.modules };
-  expect(sparsePatterns(single)).toContain("/curricula/architecture-backend/project/");
+  expect(sparsePatterns(single)).toContain("/curricula/backend/architecture/project/");
   expect(sparsePatterns(single).some((p) => p.includes("solutions"))).toBe(false);
 });
