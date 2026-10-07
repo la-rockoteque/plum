@@ -106,7 +106,7 @@ run `"$P" explained <domain> --quality full|partial` with the concept's Plum dom
 line) — as in `/plum:explain`. Don't log an incorrect answer.
 
 Then run `"$P" formations match <concept-id>`. If it prints a module, offer it in one line: a hands-on formation
-module on this concept exists, and `"$P" formations fetch <formation> --lang <lang>` sets it up in a new folder
-where the user runs `/start`. Fetch only if the user says yes. Print nothing if there's no match.
+module on this concept exists, and `/plum:formations <formation>` sets it up and starts it. Follow that skill only if
+the user says yes. Print nothing if there's no match.
 
 Do not modify the user's repository during a teaching session.

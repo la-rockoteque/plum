@@ -121,6 +121,7 @@ The plugin wires up:
 | `/plum:verify` | Mark the last delegation as reviewed |
 | `/plum:explain` | Explain-back loop, logged with `plum explained` |
 | `/plum:teach <concept>` | Lecture deck on a concept, bound to the current repo's domain and architecture |
+| `/plum:formations [concept]` | Find a hands-on formation, fetch it to `~/formations/<id>`, and start it in this session |
 | `/plum:goals` | Propose growth goals from your Plum data; optionally create them in a connected tool (Leapsome) |
 | `/plum:connect <connector>` | Create goals or sync progress through a connector, always showing the exact payload first |
 | `/plum:feedback <text>` | Draft feedback or a feature request, review it, then open a pre-filled form you submit yourself |
