@@ -70,6 +70,14 @@ test("fetch checks out the coach, one language's curriculum and its domain's sha
   expect(existsSync(join(c, "project/python"))).toBe(false);
   expect(existsSync(join(dest, "curricula/backend/modules/sql/01-sql.md"))).toBe(true);
   expect(existsSync(join(dest, "curricula/frontend"))).toBe(false);
+  expect(r.out).toContain(`cd '${dest}'\nclaude\n`);
+});
+
+test("fetch hands off with commands that survive a path with spaces and quotes", () => {
+  const dest = join(home, "it's mine");
+  const r = plum("fetch", "architecture-backend", "--dir", dest);
+  expect(r.code).toBe(0);
+  expect(r.out).toContain(`cd '${dest.replace("'", "'\\''")}'\nclaude\n`);
 });
 
 test("fetch refuses a non-empty folder and leaves it untouched", () => {
@@ -93,4 +101,9 @@ test("a formation with a single starter fetches the whole project/, still withou
   const single: Formation = { title: f.title, repoUrl: f.repoUrl, ref: f.ref, root: f.root, modules: f.modules };
   expect(sparsePatterns(single)).toContain("/curricula/backend/architecture/project/");
   expect(sparsePatterns(single).some((p) => p.includes("solutions"))).toBe(false);
+});
+
+test("fetch brings the extra files a formation includes from a sibling track", () => {
+  const f: Formation = { ...formation("/r", "main"), include: ["curricula/frontend/react/docs/practices.md"] };
+  expect(sparsePatterns(f)).toContain("/curricula/frontend/react/docs/practices.md");
 });
