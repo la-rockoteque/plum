@@ -2,7 +2,7 @@
   "architecture-backend": {
     "title": "Formation Architecture backend",
     "repoUrl": "git@git.nexapptech.com:internal/formation-frontend.git",
-    "ref": "000250917eed632423d44f81d1991088be1e9276",
+    "ref": "4c9465b028bd7b4ff3154dbbe87dd79ca4bd01c7",
     "root": "curricula/backend/architecture",
     "languages": [
       "python",
@@ -33,7 +33,7 @@
   "frontend": {
     "title": "Formation Frontend",
     "repoUrl": "git@git.nexapptech.com:internal/formation-frontend.git",
-    "ref": "000250917eed632423d44f81d1991088be1e9276",
+    "ref": "4c9465b028bd7b4ff3154dbbe87dd79ca4bd01c7",
     "root": "curricula/frontend/react",
     "modules": {
       "07-testing": [
@@ -47,6 +47,40 @@
       "13-architecture": [
         "layered-architecture",
         "coupling-cohesion"
+      ]
+    }
+  },
+  "micro-frontends": {
+    "title": "Formation Frontend — Micro-frontends",
+    "repoUrl": "git@git.nexapptech.com:internal/formation-frontend.git",
+    "ref": "4c9465b028bd7b4ff3154dbbe87dd79ca4bd01c7",
+    "root": "curricula/frontend/micro-frontends",
+    "include": [
+      "curricula/frontend/react/docs/practices.md",
+      "curricula/frontend/react/docs/resources.md",
+      "curricula/frontend/react/docs/stack.md",
+      "curricula/frontend/react/questions/react.md"
+    ],
+    "modules": {
+      "01-why-micro-frontends": [
+        "coupling-cohesion"
+      ],
+      "05-shell-contract": [
+        "dependency-inversion"
+      ],
+      "06-cross-remote-events": [
+        "domain-events",
+        "coupling-cohesion"
+      ],
+      "07-server-data": [
+        "domain-events"
+      ],
+      "10-exposed-components": [
+        "coupling-cohesion"
+      ],
+      "11-testing": [
+        "testing-through-public-api",
+        "test-doubles"
       ]
     }
   }

@@ -17,6 +17,7 @@ export interface Formation {
   ref: string;
   root: string;                        // the curriculum folder, relative to the repo
   languages?: string[];                // one starter per language under project/<lang>/; absent = a single project/
+  include?: string[];                  // extra files from a sibling track, relative to the repo
   modules: Record<string, string[]>;   // module id → Plum concept ids
 }
 
@@ -40,7 +41,7 @@ export function sparsePatterns(f: Formation, lang?: string): string[] {
   const shared = `${root.slice(0, root.lastIndexOf("/"))}/modules/`;
   return ["/CLAUDE.md", "/.claude/settings.json", "/.claude/skills/", "/learner/.gitkeep",
     `${root}/curriculum.md`, `${root}/modules/`, `${root}/questions/`, `${root}/docs/`, shared,
-    lang ? `${root}/project/${lang}/` : `${root}/project/`];
+    lang ? `${root}/project/${lang}/` : `${root}/project/`, ...(f.include ?? []).map((p) => `/${p}`)];
 }
 
 export function fetchFormation(id: string, lang: string | undefined, dirArg?: string): string {
@@ -50,7 +51,7 @@ export function fetchFormation(id: string, lang: string | undefined, dirArg?: st
   if (langs.length === 0 && lang) throw new Error(`${id} has a single starter; drop --lang.`);
   const chosen = lang ?? langs[0];
   if (chosen && !langs.includes(chosen)) throw new Error(`${id} has no ${chosen} starter (available: ${langs.join(", ")}).`);
-  if (!isSafeSegment(id) || (chosen && !isSafeSegment(chosen)) || !isSafeRelativePath(f.root)) throw new Error(`Invalid entry for ${id} in formations.json.`);
+  if (!isSafeSegment(id) || (chosen && !isSafeSegment(chosen)) || ![f.root, ...(f.include ?? [])].every(isSafeRelativePath)) throw new Error(`Invalid entry for ${id} in formations.json.`);
   if (!isSafeRepoUrl(f.repoUrl)) throw new Error(`Refusing to fetch from ${JSON.stringify(f.repoUrl)}.`);
   if (!isSafeRef(f.ref)) throw new Error(`Refusing to fetch ref ${JSON.stringify(f.ref)}.`);
 
@@ -97,8 +98,10 @@ export function runFormationsCommand(argv: string[]): number {
       case "fetch": {
         if (!arg) { console.error("Usage: plum formations fetch <formation> [--lang L] [--dir D]"); return 1; }
         const dest = fetchFormation(arg, flags.lang, flags.dir);
-        console.log(dest);
-        console.log(`  Open Claude Code in that folder and run /start.`);
+        // The coach's skills, CLAUDE.md and settings load only in a session started in its folder.
+        console.log(`Ready in ${dest}. Start the coach in its own session:\n`);
+        console.log(`cd '${dest.replaceAll("'", "'\\''")}'\nclaude\n`);
+        console.log(`Then type /start.`);
         return 0;
       }
       default:
