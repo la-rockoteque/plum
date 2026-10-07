@@ -6,6 +6,7 @@
  *   plum pre-tool       reads PreToolUse JSON from stdin
  *   plum post-tool      reads PostToolUse JSON from stdin
  *   plum user-prompt    reads UserPromptSubmit JSON from stdin
+ *   plum stop           reads Stop JSON from stdin
  *   plum session-end    reads SessionEnd JSON from stdin
  *
  * User commands:
@@ -37,6 +38,7 @@ import { skillContext, logExplanation, logIndependence } from "./coaching.js";
 import { runProgressCommand, runGoalsCommand }        from "./progress.js";
 import { runConnectorsCommand, printGoalProgress }    from "./connectors.js";
 import { runTeachCommand }                            from "./teach.js";
+import { detectOwnEdits, saveSnapshot }               from "./worktree.js";
 import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
 import { join }                                       from "path";
@@ -63,6 +65,7 @@ async function main(): Promise<void> {
     case "pre-tool":     return handlePreTool();
     case "post-tool":    return handlePostTool();
     case "user-prompt":  return handleUserPrompt();
+    case "stop":         return handleStop();
     case "session-end":  return handleSessionEnd();
     case "update-check": return runUpdateCheck();
     case "update":       { process.exitCode = runUpdateCommand(process.argv.slice(3)); return; }
@@ -175,6 +178,14 @@ async function handleUserPrompt(): Promise<void> {
     })]
   );
   db.run(`UPDATE sessions SET event_count = event_count + 1 WHERE id = ?`, [session_id]);
+
+  // The user's own edits since Claude's last turn are a request of their own, solved without Claude
+  if (cwd && detectOwnEdits(session_id, cwd, now)) count("own_edits");
+}
+
+async function handleStop(): Promise<void> {
+  const { session_id, cwd } = await readStdin() as { session_id?: string; cwd?: string };
+  if (session_id && cwd) saveSnapshot(session_id, cwd);
 }
 
 async function handlePreTool(): Promise<void> {
@@ -236,7 +247,7 @@ async function handlePostTool(): Promise<void> {
 
   db.run(
     `INSERT INTO events (session_id, ts, event_type, tool_name, category, output_size, delegated, metadata) VALUES (?, ?, 'post_tool', ?, ?, ?, ?, ?)`,
-    [session_id, now, tool_name, category, outputSize, significant ? 1 : 0, JSON.stringify({ file_path: (tool_input as any)?.file_path })]
+    [session_id, now, tool_name, category, outputSize, significant ? 1 : 0, JSON.stringify({ file_path: (tool_input as any)?.file_path ?? (tool_input as any)?.notebook_path })]
   );
   db.run(`UPDATE sessions SET event_count = event_count + 1 WHERE id = ?`, [session_id]);
 
@@ -263,6 +274,7 @@ async function handleSessionEnd(): Promise<void> {
   const db  = getDb();
   const now = Date.now();
   db.run(`UPDATE sessions SET ended_at = ? WHERE id = ?`, [now, session_id]);
+  db.run(`DELETE FROM worktree_snapshots WHERE session_id = ?`, [session_id]);
 
   const session = db.query(`SELECT * FROM sessions WHERE id = ?`).get(session_id) as any;
   const durationMin = session?.started_at ? Math.round((now - session.started_at) / 60_000) : 0;

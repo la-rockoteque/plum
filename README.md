@@ -52,7 +52,7 @@ how many tool calls Claude made. Every prompt you send is a request, and it coun
 
 | You… | Weight |
 |---|---|
-| solved it yourself (`plum independent`) | 3 (a fully engaged request of its own) |
+| solved it yourself (`plum independent`, or detected: 3+ lines you changed between Claude's turns, in files Claude didn't touch) | 3 (a fully engaged request of its own) |
 | explained the result back, fully | 2 |
 | predicted before asking (`/plum:predict`) | 1 |
 | explained it back partially, or ran `plum verify` | 1 |
@@ -110,7 +110,7 @@ update (or updates silently if you opt in) — see [docs/updates.md](docs/update
 
 The plugin wires up:
 
-- **Hooks** (`hooks/hooks.json`) — PreToolUse, PostToolUse, UserPromptSubmit, SessionEnd
+- **Hooks** (`hooks/hooks.json`) — PreToolUse, PostToolUse, UserPromptSubmit, Stop, SessionEnd
 - **Skills** (`skills/`)
 
 | Command | What it does |

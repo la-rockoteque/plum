@@ -71,6 +71,16 @@ function migrate(db: Database): void {
     )
   `);
 
+  // Working tree as Claude left it at its last stop, to spot the user's own edits before the next prompt
+  db.run(`
+    CREATE TABLE IF NOT EXISTS worktree_snapshots (
+      session_id TEXT    PRIMARY KEY,
+      ts         INTEGER NOT NULL,
+      head       TEXT    NOT NULL,
+      tree       TEXT    NOT NULL
+    )
+  `);
+
   db.run(`CREATE INDEX IF NOT EXISTS idx_events_session  ON events(session_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_events_ts       ON events(ts)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_events_category ON events(category)`);
