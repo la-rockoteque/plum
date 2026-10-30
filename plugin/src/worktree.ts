@@ -9,7 +9,7 @@ import { getDb } from "./db.js";
 const MIN_LINES = 3;   // below this it's a typo fix, not work
 const LOCKFILE_RE = /(^|\/)(bun\.lockb?|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|go\.sum|composer\.lock|Gemfile\.lock)$/;
 const GIT_TIMEOUT_MS = 5000;
-const TEST_FILE_RE = /(^|\/)(tests?|__tests__|spec)\/|[._-](test|spec)\.[a-z]+$|(^|\/)test_[^/]*\.py$/i;
+export const TEST_FILE_RE = /(^|\/)(tests?|__tests__|spec)\/|[._-](test|spec)\.[a-z]+$|(^|\/)test_[^/]*\.py$/i;
 
 function git(cwd: string, args: string[], env?: Record<string, string>): string | null {
   if (!existsSync(cwd)) return null;
@@ -47,7 +47,9 @@ export function snapshotTree(cwd: string): { head: string; tree: string } | null
 export interface OwnEdits { files: string[]; added: number; removed: number }
 
 // Lines changed between two trees, minus lockfiles, binaries and the files Claude edited.
-export function ownEdits(cwd: string, from: string, to: string, claudeFiles: Set<string>): OwnEdits {
+// With `typed` (files an editor extension saw the user type in), only those count: a formatter or a second session
+// writes files without the user typing.
+export function ownEdits(cwd: string, from: string, to: string, claudeFiles: Set<string>, typed?: Set<string>): OwnEdits {
   const top = git(cwd, ["rev-parse", "--show-toplevel"]);
   // -z: paths arrive raw (no C-quoting), and may themselves contain tabs
   const out = top && git(top, ["diff", "--numstat", "-z", "--no-renames", from, to]);
@@ -56,7 +58,9 @@ export function ownEdits(cwd: string, from: string, to: string, claudeFiles: Set
   for (const record of out.split("\0")) {
     const [a, r, ...rest] = record.split("\t");
     const path = rest.join("\t");
-    if (!path || a === "-" || LOCKFILE_RE.test(path) || claudeFiles.has(resolve(top, path))) continue;
+    if (!path || a === "-" || LOCKFILE_RE.test(path)) continue;
+    const abs = resolve(top, path);
+    if (claudeFiles.has(abs) || (typed && !typed.has(abs))) continue;
     edits.files.push(path);
     edits.added += Number(a);
     edits.removed += Number(r);
@@ -83,7 +87,8 @@ export function saveSnapshot(sessionId: string, cwd: string, now = Date.now()): 
 // ponytail: skips the gap when HEAD moved (a pull or checkout would look like user work), so edits the user committed
 // themselves between turns are missed; upgrade by diffing only the new commits whose author is `git config user.email`.
 // Claude's own Bash edits are in the Stop snapshot already; they only leak in when Stop didn't run (see below).
-// An editor auto-formatter or a second Claude session in the same repo still counts as the user.
+// Without the IDE extension, an editor auto-formatter or a second Claude session in the same repo counts as the user.
+// ponytail: with it, edits typed in another editor while VS Code is open are missed; upgrade with an IDE heartbeat.
 export function detectOwnEdits(sessionId: string, cwd: string, now = Date.now()): OwnEdits | null {
   const db = getDb();
   const prev = db.query(`SELECT ts, head, tree FROM worktree_snapshots WHERE session_id = ?`)
@@ -101,8 +106,12 @@ export function detectOwnEdits(sessionId: string, cwd: string, now = Date.now())
   ).all(sessionId, prev.ts) as { t: string; f: string | null }[];
   if (tools.some((r) => r.t === "Bash")) return null;
   const claudeFiles = new Set(tools.flatMap((r) => r.f ? [real(resolve(cwd, r.f))] : []));
+  const typedRows = db.query(
+    `SELECT DISTINCT json_extract(metadata, '$.file_path') AS f FROM events WHERE session_id = ? AND event_type = 'ide_edit' AND ts >= ?`
+  ).all(sessionId, prev.ts) as { f: string }[];
+  const typed = typedRows.length ? new Set(typedRows.map((r) => real(resolve(r.f)))) : undefined;
 
-  const edits = ownEdits(cwd, prev.tree, snap.tree, claudeFiles);
+  const edits = ownEdits(cwd, prev.tree, snap.tree, claudeFiles, typed);
   if (edits.added + edits.removed < MIN_LINES) return null;
   db.run(
     `INSERT INTO events (session_id, ts, event_type, category, delegated, verified, metadata) VALUES (?, ?, 'independence', ?, 0, 1, ?)`,

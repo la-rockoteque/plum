@@ -39,6 +39,7 @@ import { runProgressCommand, runGoalsCommand }        from "./progress.js";
 import { runConnectorsCommand, printGoalProgress }    from "./connectors.js";
 import { runTeachCommand }                            from "./teach.js";
 import { detectOwnEdits, saveSnapshot }               from "./worktree.js";
+import { recordIdeEvent, writeCliPointer }            from "./ide.js";
 import { extname }                                    from "path";
 import { PLUM_DATA_DIR, DB_PATH, HOME }               from "./env.js";
 import { join }                                       from "path";
@@ -59,6 +60,7 @@ async function readStdin(): Promise<Record<string, unknown>> {
 
 async function main(): Promise<void> {
   const cfg = getConfig();
+  if (cfg.enabled === false && command === "ide-event") return console.log("[Plum] Plum is disabled; nothing recorded.");
   if (cfg.enabled === false && !["uninstall", "wipe", "export", "concepts", "library", "formations", "teach", "update", "update-check", "help"].includes(command)) return;
 
   switch (command) {
@@ -67,9 +69,10 @@ async function main(): Promise<void> {
     case "user-prompt":  return handleUserPrompt();
     case "stop":         return handleStop();
     case "session-end":  return handleSessionEnd();
-    case "update-check": return runUpdateCheck();
+    case "update-check": writeCliPointer(); return runUpdateCheck();
+    case "ide-event":    { const input = await readStdin(); return userCommand(() => recordIdeEvent(input)); }
     case "update":       { process.exitCode = runUpdateCommand(process.argv.slice(3)); return; }
-    case "skill-health": return printSkillHealth();
+    case "skill-health": return process.argv[3] === "--json" ? printSkillHealthJson() : printSkillHealth();
     case "status":       return printStatus();
     case "predict":      return logPrediction(process.argv.slice(3).join(" "));
     case "verify":       return runManualVerify();
@@ -109,11 +112,13 @@ Plum — Professor Plum cognitive atrophy harness
     pre-tool      log PreToolUse event + emit coaching intervention if pattern detected
     post-tool     log PostToolUse event + auto-detect verification + update skill scores
     user-prompt   log UserPromptSubmit + classify intent domain
+    stop          snapshot the working tree to spot the user's own edits before the next prompt
     session-end   finalize session row + print summary
     update-check  on session start: check the marketplace for a newer Plum (per updates.mode)
+    ide-event     JSON on stdin from an editor extension: {kind: debug|test|edit, cwd, …}
 
   User commands:
-    skill-health  print skill radar (5 domains, scores 0–100)
+    skill-health  print skill radar (5 domains, scores 0–100; --json for editor extensions)
     status        weekly delegation, verify, predict, explain, independence summary
     predict <txt> log a prediction before asking Claude (boosts synthesis score)
     verify        manually mark last delegation as verified (boosts score)
@@ -185,7 +190,9 @@ async function handleUserPrompt(): Promise<void> {
 
 async function handleStop(): Promise<void> {
   const { session_id, cwd } = await readStdin() as { session_id?: string; cwd?: string };
-  if (session_id && cwd) saveSnapshot(session_id, cwd);
+  if (!session_id || !cwd) return;
+  ensureSession(session_id, Date.now(), cwd);
+  saveSnapshot(session_id, cwd);
 }
 
 async function handlePreTool(): Promise<void> {
@@ -328,6 +335,11 @@ function printSkillHealth(): void {
   for (const s of snapshot.filter((x) => x.atRisk)) {
     console.log(`  ⚠  ${s.label}: ${s.delegationRate}% delegated — use /predict before asking`);
   }
+}
+
+
+function printSkillHealthJson(): void {
+  console.log(JSON.stringify({ overall: getOverallHealthScore(), domains: getSkillSnapshot() }, null, 2));
 }
 
 

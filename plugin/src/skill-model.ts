@@ -65,13 +65,14 @@ export function updateSkillScore(
 // not a running sum of tool calls (which saturated at 0 or 100 within a session). Each prompt is a request;
 // it's engaged by what the user does around it: a prediction before it (1), an explain-back after it
 // (full 2, partial 1), a manual verify after it (1). Solving something yourself is a fully engaged request (3).
+// Debugging or running tests yourself in the IDE (ide_debug, ide_test) engages the next request in that domain (1).
 // A request's value is min(weight, 3) / 3. Score = 100 · (Σ value + 2) / (requests + 4): 50 with no data,
 // and a few events can't push it to an extreme. Claude's own test runs and file reads are neutral.
 
 export interface ScoringEvent {
   session: string;
   ts: number;
-  type: "user_prompt" | "predict" | "explanation" | "manual_verify" | "independence" | "post_tool";
+  type: "user_prompt" | "predict" | "explanation" | "manual_verify" | "independence" | "post_tool" | "ide_debug" | "ide_test";
   domain?: string;
   quality?: "full" | "partial";
 }
@@ -96,6 +97,7 @@ const AT_RISK_MIN_REQUESTS = 10;
 const MAX_WEIGHT = 3;
 const PRIOR_VALUE = 2;         // a prior of 4 requests at 0.5 engagement
 const PRIOR_REQUESTS = 4;
+const IDE_CREDIT_MS = 30 * 60_000;   // IDE activity older than this doesn't engage the next request
 
 interface Request { domain: string; ts: number; weight: number }
 
@@ -106,10 +108,16 @@ function requestsFrom(events: ScoringEvent[]): Request[] {
   for (const list of bySession.values()) {
     list.sort((a, b) => a.ts - b.ts);
     let pending = 0;
+    const pendingIn = new Map<string, number>();   // domain → ts of the latest IDE activity, credited in that domain only
     let current: Request | null = null;
     for (const e of list) {
       if (e.type === "predict") pending += 1;
-      else if (e.type === "user_prompt" && e.domain) { current = { domain: e.domain, ts: e.ts, weight: pending }; pending = 0; out.push(current); }
+      else if ((e.type === "ide_debug" || e.type === "ide_test") && e.domain) pendingIn.set(e.domain, e.ts);
+      else if (e.type === "user_prompt" && e.domain) {
+        const ide = e.ts - (pendingIn.get(e.domain) ?? -Infinity) <= IDE_CREDIT_MS ? 1 : 0;
+        current = { domain: e.domain, ts: e.ts, weight: pending + ide };
+        pending = 0; pendingIn.delete(e.domain); out.push(current);
+      }
       else if (e.type === "explanation" && current) current.weight += e.quality === "partial" ? 1 : 2;
       else if (e.type === "manual_verify" && current) current.weight += 1;
       else if (e.type === "independence" && e.domain) out.push({ domain: e.domain, ts: e.ts, weight: MAX_WEIGHT });
@@ -147,7 +155,7 @@ export function scoreDomains(events: ScoringEvent[], now = Date.now()): DomainSc
 function loadScoringEvents(now: number): ScoringEvent[] {
   const rows = getDb().query(
     `SELECT session_id AS s, ts, event_type AS t, category AS c, metadata AS m FROM events
-     WHERE ts > ? AND event_type IN ('user_prompt', 'predict', 'explanation', 'manual_verify', 'independence')`
+     WHERE ts > ? AND event_type IN ('user_prompt', 'predict', 'explanation', 'manual_verify', 'independence', 'ide_debug', 'ide_test')`
   ).all(now - WINDOW_DAYS * DAY_MS) as { s: string; ts: number; t: ScoringEvent["type"]; c: string | null; m: string | null }[];
   return rows.map((r) => {
     let quality: "full" | "partial" | undefined;
